@@ -9,7 +9,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import type { PublicQuoteView } from '@/data/repository'
+import type { PublicQuoteView, Repository } from '@/data/repository'
+import { createRepository } from '@/data'
 import { formatDate } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 
@@ -21,15 +22,26 @@ import { formatMoney } from '@/lib/money'
  */
 export function PublicQuote() {
   const { token = '' } = useParams()
-  const { repository } = useData()
+  const [repository, setRepository] = useState<Repository | null>(null)
 
   const [view, setView] = useState<PublicQuoteView | null>(null)
   const [loading, setLoading] = useState(true)
   const [deciding, setDeciding] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
 
+  useEffect(() => {
+    let active = true
+    void createRepository().then((created) => {
+      if (active) setRepository(created)
+    }).catch(() => {
+      if (active) setFailed('We could not connect to the quote service. Please try again later.')
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   const load = useCallback(async () => {
-    // The data layer picks its backend asynchronously at start-up.
     if (!repository) return
     setLoading(true)
     try {
@@ -46,7 +58,7 @@ export function PublicQuote() {
     void load()
   }, [load])
 
-  if (loading) {
+  if (loading || !repository) {
     return (
       <div className="min-h-dvh bg-ink-50">
         <LoadingState label="Loading your quote…" />
@@ -117,102 +129,64 @@ export function PublicQuote() {
                 ? 'You accepted this quote.'
                 : 'You declined this quote.'}
             </p>
-            <p className="mt-1 text-sm text-ink-600">
-              {formatDate(quote.decided_at)} ·{' '}
-              {quote.status === 'accepted'
-                ? `${business.business_name} has been notified and will be in touch to book the work in.`
-                : `${business.business_name} has been notified. If you change your mind, just give them a call.`}
-            </p>
-            {business.contact_phone ? (
-              <Button variant="secondary" className="mt-4" asChild>
-                <a href={`tel:${business.contact_phone}`}>
-                  <Phone /> {business.contact_phone}
-                </a>
-              </Button>
-            ) : null}
+            <p className="mt-1 text-sm text-ink-600">Thank you for letting us know.</p>
           </div>
-        ) : null}
-
-        {expired ? (
-          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 print-hide">
-            <p className="text-base font-semibold text-amber-900">This quote has expired</p>
-            <p className="mt-1 text-sm text-amber-800">
-              It was valid until {formatDate(quote.valid_until)}. Get in touch with{' '}
-              {business.business_name} for an up-to-date price.
-            </p>
+        ) : expired ? (
+          <div className="mb-5 rounded-2xl border border-ink-200 bg-ink-100 p-5 print-hide">
+            <p className="text-base font-semibold text-ink-800">This quote has expired.</p>
+            <p className="mt-1 text-sm text-ink-600">Please contact the sender if you'd like an updated quote.</p>
           </div>
         ) : null}
 
         <QuoteDocument quote={quote} items={items} customer={customer} business={business} />
 
         {!decided && !expired ? (
-          <div className="mt-5 rounded-2xl border border-ink-200 bg-white p-5 shadow-card print-hide">
-            <p className="text-base font-semibold text-ink-900">Happy with this quote?</p>
-            <p className="mt-1 text-sm text-ink-500">
-              Accepting lets {business.business_name} know to book the work in. Nothing is charged
-              now.
-            </p>
-
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button size="lg" className="flex-1" disabled={deciding}>
-                    {deciding ? <Loader2 className="animate-spin" /> : <Check />}
-                    Accept quote
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogTitle>Accept this quote?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    You're accepting {quote.quote_number} for{' '}
-                    {formatMoney(quote.total, business.currency_code || 'NZD')} including{' '}
-                    {business.tax_label}. {business.business_name} will be in touch to arrange a
-                    time.
-                  </AlertDialogDescription>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Not yet</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => void decide('accepted')}>
-                      Yes, accept
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="secondary" size="lg" className="flex-1" disabled={deciding}>
-                    <X /> Decline
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogTitle>Decline this quote?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {business.business_name} will be let know you're not going ahead. You can still
-                    call them if you'd like it revised instead.
-                  </AlertDialogDescription>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Go back</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-red-600 hover:bg-red-700"
-                      onClick={() => void decide('declined')}
-                    >
-                      Decline
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-
-            {business.contact_phone ? (
-              <p className="mt-4 text-center text-sm text-ink-500">
-                Questions first?{' '}
-                <a href={`tel:${business.contact_phone}`} className="font-medium text-brand-700">
-                  Call {business.contact_phone}
-                </a>
-              </p>
-            ) : null}
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 print-hide">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="lg" disabled={deciding}>
+                  <Check /> Accept quote
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogTitle>Accept this quote?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This records your acceptance and lets the contractor start the job.
+                </AlertDialogDescription>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Not yet</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => void decide('accepted')}>Accept quote</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="secondary" size="lg" disabled={deciding}>
+                  <X /> Decline
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogTitle>Decline this quote?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The contractor will be notified that you declined the quote.
+                </AlertDialogDescription>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep quote</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => void decide('declined')}>Decline quote</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         ) : null}
+
+        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-ink-400 print-hide">
+          <Phone className="size-3.5" />
+          Questions? Contact {business.contact_phone ?? business.contact_email ?? 'the sender'}.
+        </div>
+
+        <p className="mt-3 text-center text-xs text-ink-400 print-hide">
+          Quote generated {formatDate(quote.created_at)} · {formatMoney(quote.total, business.currency_code)}
+        </p>
       </div>
     </div>
   )
