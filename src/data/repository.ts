@@ -75,7 +75,10 @@ export interface Repository {
   resetDemoData?(): Promise<Snapshot>
 }
 
-/** Public link token for a quote — opaque, not derived from the quote id. */
+/**
+ * Demo-only fallback token. Real Supabase quotes carry a database-generated
+ * opaque `public_token`; callers should prefer that value whenever present.
+ */
 export function publicTokenFor(quoteId: string): string {
   return quoteId.replace(/-/g, '').slice(0, 24)
 }
