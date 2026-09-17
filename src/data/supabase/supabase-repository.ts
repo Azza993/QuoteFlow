@@ -11,6 +11,7 @@ import type { PublicQuoteView, Repository, Snapshot } from '../repository'
 import type {
   BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem,
 } from '@/types/domain'
+import { calculateTotals } from '@/lib/money'
 import { getSupabase } from './client'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -102,9 +103,23 @@ export class SupabaseRepository implements Repository {
   }
 
   async replaceQuoteItems(quoteId: string, items: QuoteItem[]): Promise<QuoteItem[]> {
-    unwrap(await this.db.from('quote_items').delete().eq('quote_id', quoteId).select())
-    if (items.length === 0) return []
-    return (unwrap(await this.db.from('quote_items').insert(items).select()) as Record<string, unknown>[]).map(toQuoteItem)
+    const quoteRow = unwrap(
+      await this.db.from('quotes').select('gst_inclusive,gst_rate').eq('id', quoteId).single(),
+    ) as Record<string, unknown>
+    const totals = calculateTotals(items, Boolean(quoteRow.gst_inclusive), num(quoteRow.gst_rate, 0.15))
+    const payload = items.map(({ id, description, quantity, unit, cost, markup, selling_price, type, notes, sort_order }) => ({
+      id, description, quantity, unit, cost, markup, selling_price, type, notes, sort_order,
+    }))
+
+    const result = unwrap(await this.db.rpc('replace_quote_items', {
+      p_quote_id: quoteId,
+      p_items: payload,
+      p_subtotal: totals.subtotal,
+      p_gst_amount: totals.gst_amount,
+      p_total: totals.total,
+    })) as Record<string, unknown>[]
+
+    return result.map(toQuoteItem)
   }
 
   async upsertPriceBookItem(item: PriceBookItem): Promise<PriceBookItem> {
