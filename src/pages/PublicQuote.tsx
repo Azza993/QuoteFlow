@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Check, Phone, Printer, X } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import { useData } from '@/hooks/use-data'
 import { QuoteDocument } from '@/components/QuoteDocument'
 import { Button } from '@/components/ui/button'
 import { LoadingState } from '@/components/LoadingState'
