@@ -271,3 +271,78 @@ drop trigger if exists quotes_assign_number on public.quotes;
 create trigger quotes_assign_number
 before insert on public.quotes
 for each row execute function public.assign_quote_number();
+
+-- ----------------------------------------------------- atomic item updates
+-- Replacing all line items is a single database transaction. Totals are
+-- updated in the same transaction so a failed insert cannot leave a quote
+-- with empty items or stale totals.
+create or replace function public.replace_quote_items(
+  p_quote_id uuid,
+  p_items jsonb,
+  p_subtotal bigint,
+  p_gst_amount bigint,
+  p_total bigint
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  quote_business_id uuid;
+begin
+  select business_id into quote_business_id
+  from public.quotes
+  where id = p_quote_id;
+
+  if quote_business_id is null then
+    raise exception 'quote not found';
+  end if;
+
+  delete from public.quote_items where quote_id = p_quote_id;
+
+  insert into public.quote_items (
+    id, quote_id, description, quantity, unit, cost, markup,
+    selling_price, type, notes, sort_order
+  )
+  select
+    x.id,
+    p_quote_id,
+    x.description,
+    x.quantity,
+    x.unit,
+    x.cost,
+    x.markup,
+    x.selling_price,
+    x.type::line_item_type,
+    x.notes,
+    x.sort_order
+  from jsonb_to_recordset(coalesce(p_items, '[]'::jsonb)) as x(
+    id uuid,
+    description text,
+    quantity numeric(12,3),
+    unit text,
+    cost bigint,
+    markup numeric(8,2),
+    selling_price bigint,
+    type text,
+    notes text,
+    sort_order integer
+  );
+
+  update public.quotes
+  set subtotal = p_subtotal,
+      gst_amount = p_gst_amount,
+      total = p_total
+  where id = p_quote_id;
+
+  return coalesce(
+    (select jsonb_agg(to_jsonb(i) order by i.sort_order)
+     from public.quote_items i
+     where i.quote_id = p_quote_id),
+    '[]'::jsonb
+  );
+end;
+$$;
+
+grant execute on function public.replace_quote_items(uuid, jsonb, bigint, bigint, bigint) to authenticated;
