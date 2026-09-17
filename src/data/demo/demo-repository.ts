@@ -90,10 +90,6 @@ export class DemoRepository implements Repository {
 
   deleteQuote(id: string): Promise<void> {
     return this.commit((s) => {
-      const quote = s.quotes.find((q) => q.id === id)
-      if (quote?.status === 'accepted') {
-        throw new Error('Accepted quotes cannot be deleted; archive them instead.')
-      }
       s.quotes = s.quotes.filter((q) => q.id !== id)
       s.quoteItems = s.quoteItems.filter((i) => i.quote_id !== id)
       s.followUps = s.followUps.filter((f) => f.quote_id !== id)
