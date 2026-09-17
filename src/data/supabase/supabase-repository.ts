@@ -133,6 +133,26 @@ export class SupabaseRepository implements Repository {
     return unwrap(await this.db.from('note_scans').upsert(scan).select().single()) as NoteScan
   }
 
+  async storeNoteImage(scanId: string, file: File): Promise<string> {
+    if (!file.type.startsWith('image/')) throw new Error('Only image files can be stored.')
+    if (file.size > 10 * 1024 * 1024) throw new Error('That photo is larger than the 10 MB limit.')
+
+    const business = unwrap(
+      await this.db.from('business_profile').select('id').limit(1).maybeSingle(),
+    ) as { id: string } | null
+    if (!business?.id) throw new Error('No business profile found.')
+
+    const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+    const path = `${business.id}/${scanId}/${crypto.randomUUID()}.${extension}`
+    const uploaded = await this.db.storage.from('note-scans').upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: false,
+    })
+    if (uploaded.error) throw new Error(uploaded.error.message)
+    return path
+  }
+
   async loadPublicQuote(token: string): Promise<PublicQuoteView | null> {
     // Read through a security-definer function so an anonymous visitor can see
     // exactly one quote by token and cannot enumerate the table.
