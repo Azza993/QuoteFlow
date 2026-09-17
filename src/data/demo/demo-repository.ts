@@ -35,8 +35,6 @@ export class DemoRepository implements Repository {
       const raw = localStorage.getItem(STORAGE_KEY)
       return raw ? (JSON.parse(raw) as Snapshot) : null
     } catch {
-      // Private browsing, storage disabled, or corrupt JSON — fall back to the
-      // seed rather than leaving the contractor staring at an error.
       return null
     }
   }
@@ -76,7 +74,6 @@ export class DemoRepository implements Repository {
   deleteCustomer(id: string): Promise<void> {
     return this.commit((s) => {
       s.customers = s.customers.filter((c) => c.id !== id)
-      // Quotes keep their history; they just lose the link.
       s.quotes = s.quotes.map((q) => (q.customer_id === id ? { ...q, customer_id: null } : q))
     })
   }
@@ -90,6 +87,10 @@ export class DemoRepository implements Repository {
 
   deleteQuote(id: string): Promise<void> {
     return this.commit((s) => {
+      const quote = s.quotes.find((q) => q.id === id)
+      if (quote?.status === 'accepted') {
+        throw new Error('Accepted quotes cannot be deleted; archive them instead.')
+      }
       s.quotes = s.quotes.filter((q) => q.id !== id)
       s.quoteItems = s.quoteItems.filter((i) => i.quote_id !== id)
       s.followUps = s.followUps.filter((f) => f.quote_id !== id)
@@ -147,7 +148,6 @@ export class DemoRepository implements Repository {
 
   loadPublicQuote(token: string): Promise<PublicQuoteView | null> {
     const quote = this.snapshot.quotes.find((q) => publicTokenFor(q.id) === token)
-    // A draft has never been sent, so its link shows nothing.
     if (!quote || quote.status === 'draft') return Promise.resolve(null)
 
     return Promise.resolve({
@@ -167,8 +167,6 @@ export class DemoRepository implements Repository {
   decidePublicQuote(token: string, decision: 'accepted' | 'declined'): Promise<void> {
     return this.commit((s) => {
       const quote = s.quotes.find((q) => publicTokenFor(q.id) === token)
-      // Only a quote still awaiting a response can be decided, so a link passed
-      // around can't flip one that has already been settled.
       if (!quote || quote.status !== 'sent') return
 
       let jobId = quote.job_id
