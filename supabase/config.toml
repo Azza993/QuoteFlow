@@ -1,0 +1,26 @@
+project_id = "quoteflow"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+
+[functions.extract-notes]
+# The customer-facing quote view and the scan flow both call this without a
+# signed-in user in some paths; the function does its own validation.
+verify_jwt = false
