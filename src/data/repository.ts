@@ -65,6 +65,8 @@ export interface Repository {
   upsertJob(job: Job): Promise<Job>
 
   upsertNoteScan(scan: NoteScan): Promise<NoteScan>
+  /** Persist a note photo and return its durable storage path/data URI. */
+  storeNoteImage(scanId: string, file: File): Promise<string>
 
   /** Public, token-addressed read used by the customer-facing quote view. */
   loadPublicQuote(token: string): Promise<PublicQuoteView | null>
