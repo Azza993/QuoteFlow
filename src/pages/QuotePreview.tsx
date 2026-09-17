@@ -28,7 +28,10 @@ export function QuotePreview() {
 
   const items = itemsForQuote(quote.id)
   const customer = customerForQuote(quote) ?? null
-  const publicUrl = `${window.location.origin}/q/${publicTokenFor(quote.id)}`
+  // Supabase generates an opaque token that must be used verbatim. The
+  // deterministic helper remains only as a demo-backend fallback.
+  const token = quote.public_token ?? publicTokenFor(quote.id)
+  const publicUrl = `${window.location.origin}/q/${token}`
 
   const emailBody = buildEmailBody()
 
@@ -172,20 +175,9 @@ export function QuotePreview() {
       ? `\n\nThe quote is valid until ${formatDate(quote!.valid_until)}.`
       : ''
 
-    return `Hi ${firstName},
-
-Thanks for having me out. Here's quote ${quote!.quote_number} — ${formatMoney(
+    return `Hi ${firstName},\n\nThanks for having me out. Here's quote ${quote!.quote_number} — ${formatMoney(
       quote!.total,
       business.currency_code || 'NZD',
-    )} including ${business.tax_label}.${scope}
-
-You can view it and accept or decline here:
-${publicUrl}${validity}
-
-Any questions, just give me a call.
-
-Cheers,
-${business.business_name}
-${business.contact_phone ?? ''}`
+    )} including ${business.tax_label}.${scope}\n\nYou can view it and accept or decline here:\n${publicUrl}${validity}\n\nAny questions, just give me a call.\n\nCheers,\n${business.business_name}\n${business.contact_phone ?? ''}`
   }
 }
