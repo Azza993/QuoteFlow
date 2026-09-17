@@ -22,6 +22,15 @@ function upsertInto<T extends { id: string }>(list: T[], value: T): T[] {
   return next
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Could not store that photo.'))
+    reader.readAsDataURL(file)
+  })
+}
+
 export class DemoRepository implements Repository {
   readonly kind = 'demo' as const
   private snapshot: Snapshot
@@ -144,6 +153,12 @@ export class DemoRepository implements Repository {
       s.noteScans = upsertInto(s.noteScans, scan)
       return scan
     })
+  }
+
+  async storeNoteImage(_scanId: string, file: File): Promise<string> {
+    // The demo has no object storage, so use a data URI. This keeps the demo
+    // genuinely persistent across refreshes rather than saving a dead blob URL.
+    return fileToDataUrl(file)
   }
 
   loadPublicQuote(token: string): Promise<PublicQuoteView | null> {
