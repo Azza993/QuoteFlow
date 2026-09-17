@@ -207,3 +207,67 @@ drop trigger if exists on_auth_user_created_quoteflow on auth.users;
 create trigger on_auth_user_created_quoteflow
 after insert on auth.users
 for each row execute function public.handle_new_auth_user();
+
+-- --------------------------------------------------------- quote numbering
+-- Quote numbers are business-scoped and year-scoped. The browser may still
+-- calculate a provisional number for immediate UX, but this trigger is the
+-- final authority, so two simultaneous quote creations cannot collide.
+create table if not exists public.quote_number_counters (
+  business_id uuid not null references public.business_profile (id) on delete cascade,
+  year integer not null,
+  next_number bigint not null check (next_number > 0),
+  primary key (business_id, year)
+);
+
+revoke all on table public.quote_number_counters from anon, authenticated;
+
+create or replace function public.allocate_quote_number(p_business_id uuid)
+returns text
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  current_year integer := extract(year from current_date)::integer;
+  allocated bigint;
+begin
+  insert into public.quote_number_counters (business_id, year, next_number)
+  select
+    p_business_id,
+    current_year,
+    coalesce(max(substring(q.quote_number from '^Q-[0-9]{4}-(\d+)$')::bigint), 0) + 1
+  from public.quotes q
+  where q.business_id = p_business_id
+    and q.quote_number ~ ('^Q-' || current_year::text || '-[0-9]+$')
+  on conflict (business_id, year) do nothing;
+
+  update public.quote_number_counters
+  set next_number = next_number + 1
+  where business_id = p_business_id
+    and year = current_year
+  returning next_number - 1 into allocated;
+
+  if allocated is null then
+    raise exception 'could not allocate quote number';
+  end if;
+
+  return format('Q-%s-%s', current_year, lpad(allocated::text, 4, '0'));
+end;
+$$;
+
+create or replace function public.assign_quote_number()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.quote_number := public.allocate_quote_number(new.business_id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists quotes_assign_number on public.quotes;
+create trigger quotes_assign_number
+before insert on public.quotes
+for each row execute function public.assign_quote_number();
