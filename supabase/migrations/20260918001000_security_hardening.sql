@@ -3,10 +3,11 @@
 
 alter function public.prevent_accepted_quote_delete() set search_path = public;
 
-revoke all on function public.allocate_quote_number(uuid) from anon, authenticated;
-revoke all on function public.assign_quote_number() from anon, authenticated;
-revoke all on function public.handle_new_auth_user() from anon, authenticated;
-revoke all on function public.owned_business_ids() from anon;
+revoke all on function public.allocate_quote_number(uuid) from public, anon, authenticated;
+revoke all on function public.assign_quote_number() from public, anon, authenticated;
+revoke all on function public.handle_new_auth_user() from public, anon, authenticated;
+revoke all on function public.owned_business_ids() from public, anon, authenticated;
+revoke all on function public.prevent_accepted_quote_delete() from public, anon, authenticated;
 
 -- These two functions are intentionally public: the first reads a single quote
 -- by opaque token and the second accepts/declines that quote.
