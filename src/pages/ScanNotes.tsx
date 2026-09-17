@@ -21,9 +21,12 @@ interface Page {
   revocable: boolean
 }
 
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_SCAN_PAGES = 12
+
 export function ScanNotes() {
   const navigate = useNavigate()
-  const { createQuote, saveNoteScan, priceBook, customers } = useData()
+  const { createQuote, saveNoteScan, priceBook, customers, repository } = useData()
 
   const [pages, setPages] = useState<Page[]>([])
   const [working, setWorking] = useState(false)
@@ -41,17 +44,33 @@ export function ScanNotes() {
 
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return
-    const added = Array.from(files)
-      .filter((file) => file.type.startsWith('image/'))
+
+    const available = MAX_SCAN_PAGES - pages.length
+    if (available <= 0) {
+      toast.error(`You can scan up to ${MAX_SCAN_PAGES} pages at once.`)
+      return
+    }
+
+    const selected = Array.from(files).slice(0, available)
+    const tooLarge = selected.filter((file) => file.size > MAX_IMAGE_BYTES)
+    const added = selected
+      .filter((file) => file.type.startsWith('image/') && file.size <= MAX_IMAGE_BYTES)
       .map((file) => ({
         id: newId(),
         url: URL.createObjectURL(file),
         file,
         revocable: true,
       }))
-    if (added.length === 0) {
+
+    if (tooLarge.length > 0) {
+      toast.error('Each photo must be 10 MB or smaller.')
+    }
+    if (added.length === 0 && tooLarge.length === 0) {
       toast.error('Those files are not photos.')
       return
+    }
+    if (selected.length < files.length) {
+      toast.warning(`Only the first ${available} pages were added.`)
     }
     setPages((current) => [...current, ...added])
   }
@@ -66,7 +85,7 @@ export function ScanNotes() {
 
   const useSampleNotes = () => {
     setPages(
-      DEMO_NOTE_IMAGES.map((url) => ({ id: newId(), url, revocable: false })),
+      DEMO_NOTE_IMAGES.slice(0, MAX_SCAN_PAGES).map((url) => ({ id: newId(), url, revocable: false })),
     )
   }
 
@@ -93,6 +112,16 @@ export function ScanNotes() {
         },
       })
 
+      setStep('Saving your note photos…')
+      const scanId = newId()
+      const storedImageUrls = await Promise.all(
+        pages.map(async (page) => {
+          if (!page.file) return page.url
+          if (!repository) throw new Error('QuoteFlow is still starting up.')
+          return repository.storeNoteImage(scanId, page.file)
+        }),
+      )
+
       setStep('Setting up your quote…')
       // A quote is created up front so the extraction always has somewhere to
       // live — even a partial read leaves the contractor with a draft to work
@@ -100,9 +129,9 @@ export function ScanNotes() {
       const quote = await createQuote({ source: 'scan' })
 
       const scan: NoteScan = {
-        id: newId(),
+        id: scanId,
         quote_id: quote.id,
-        image_urls: pages.map((page) => page.url),
+        image_urls: storedImageUrls,
         raw_extraction_json: outcome.result,
         status: 'needs_review',
         created_at: nowIso(),
@@ -111,9 +140,11 @@ export function ScanNotes() {
 
       if (outcome.warning) toast.warning(outcome.warning, { duration: 8000 })
       navigate(`/quotes/${quote.id}/review`, { replace: true })
-    } catch {
+    } catch (error) {
       toast.error(
-        "Something went wrong reading those notes. Your photos are still here — try again, or start the quote manually.",
+        error instanceof Error
+          ? error.message
+          : "Something went wrong reading those notes. Your photos are still here — try again, or start the quote manually.",
       )
       setWorking(false)
       setStep('')
@@ -218,7 +249,8 @@ export function ScanNotes() {
               <button
                 type="button"
                 onClick={() => cameraInput.current?.click()}
-                className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink-300 text-ink-500 transition-colors hover:border-brand-400 hover:text-brand-600"
+                disabled={pages.length >= MAX_SCAN_PAGES}
+                className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink-300 text-ink-500 transition-colors hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Camera className="size-6" />
                 <span className="text-sm font-medium">Add page</span>
