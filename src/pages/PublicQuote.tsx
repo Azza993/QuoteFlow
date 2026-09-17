@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Check, Loader2, Phone, Printer, X } from 'lucide-react'
+import { Check, Phone, Printer, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useData } from '@/hooks/use-data'
 import { QuoteDocument } from '@/components/QuoteDocument'
 import { Button } from '@/components/ui/button'
