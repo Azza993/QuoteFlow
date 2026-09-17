@@ -165,7 +165,7 @@ create policy note_scan_objects_owner_insert on storage.objects
   for insert to authenticated
   with check (
     bucket_id = 'note-scans'
-    and (storage.foldername(name))[1] in (select owned_business_ids()::text)
+    and (storage.foldername(name))[1] in (select id::text from business_profile where id in (select owned_business_ids()))
   );
 
 drop policy if exists note_scan_objects_owner_select on storage.objects;
@@ -173,7 +173,7 @@ create policy note_scan_objects_owner_select on storage.objects
   for select to authenticated
   using (
     bucket_id = 'note-scans'
-    and (storage.foldername(name))[1] in (select owned_business_ids()::text)
+    and (storage.foldername(name))[1] in (select id::text from business_profile where id in (select owned_business_ids()))
   );
 
 drop policy if exists note_scan_objects_owner_delete on storage.objects;
@@ -181,5 +181,29 @@ create policy note_scan_objects_owner_delete on storage.objects
   for delete to authenticated
   using (
     bucket_id = 'note-scans'
-    and (storage.foldername(name))[1] in (select owned_business_ids()::text)
+    and (storage.foldername(name))[1] in (select id::text from business_profile where id in (select owned_business_ids()))
   );
+
+-- --------------------------------------------------------------- auth setup
+-- Create a private business workspace automatically when a user signs up.
+-- This keeps the first authenticated session usable without a privileged
+-- service key in the browser. The business name comes from sign-up metadata.
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.business_profile (owner_id, business_name)
+  values (
+    new.id,
+    coalesce(nullif(trim(new.raw_user_meta_data ->> 'business_name'), ''), 'My Business')
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_quoteflow on auth.users;
+create trigger on_auth_user_created_quoteflow
+after insert on auth.users
+for each row execute function public.handle_new_auth_user();
