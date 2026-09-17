@@ -69,6 +69,8 @@ export interface Quote {
   valid_until: string | null
   terms: string | null
   source: QuoteSource
+  /** Database-generated opaque token used by the real customer-facing link. */
+  public_token?: string | null
   created_at: string
   sent_at: string | null
   decided_at: string | null
