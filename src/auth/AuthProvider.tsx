@@ -9,6 +9,7 @@ interface AuthContextValue {
   configured: boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, businessName: string) => Promise<{ confirmationRequired: boolean }>
+  resetPassword: (email: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -29,11 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void client.auth.getSession().then(({ data, error }) => {
       if (!active) return
-      if (error) {
-        setSession(null)
-      } else {
-        setSession(data.session)
-      }
+      setSession(error ? null : data.session)
       setLoading(false)
     })
 
@@ -63,6 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       if (error) throw new Error(error.message)
       return { confirmationRequired: !data.session }
+    },
+    resetPassword: async (email) => {
+      const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?mode=reset`,
+      })
+      if (error) throw new Error(error.message)
     },
     signOut: async () => {
       const { error } = await getSupabase().auth.signOut()
