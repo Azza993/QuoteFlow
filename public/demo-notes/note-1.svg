@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1100" width="800" height="1100" font-family="'Bradley Hand','Segoe Print','Comic Sans MS','Chalkboard SE',cursive">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf5"/><stop offset="1" stop-color="#f6f1e2"/>
+    </linearGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" result="n"/>
+      <feColorMatrix in="n" type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.05"/></feComponentTransfer>
+      <feComposite operator="over" in2="SourceGraphic"/></filter>
+  </defs>
+  <rect width="800" height="1100" fill="url(#paper)"/>
+  <g stroke="#cfd8e3" stroke-width="1.2">
+    <g id="rules">
+      <line x1="60" y1="150" x2="760" y2="150"/><line x1="60" y1="200" x2="760" y2="200"/>
+      <line x1="60" y1="250" x2="760" y2="250"/><line x1="60" y1="300" x2="760" y2="300"/>
+      <line x1="60" y1="350" x2="760" y2="350"/><line x1="60" y1="400" x2="760" y2="400"/>
+      <line x1="60" y1="450" x2="760" y2="450"/><line x1="60" y1="500" x2="760" y2="500"/>
+      <line x1="60" y1="550" x2="760" y2="550"/><line x1="60" y1="600" x2="760" y2="600"/>
+      <line x1="60" y1="650" x2="760" y2="650"/><line x1="60" y1="700" x2="760" y2="700"/>
+      <line x1="60" y1="750" x2="760" y2="750"/><line x1="60" y1="800" x2="760" y2="800"/>
+      <line x1="60" y1="850" x2="760" y2="850"/><line x1="60" y1="900" x2="760" y2="900"/>
+      <line x1="60" y1="950" x2="760" y2="950"/><line x1="60" y1="1000" x2="760" y2="1000"/>
+    </g>
+  </g>
+  <line x1="95" y1="40" x2="95" y2="1060" stroke="#f0a9a9" stroke-width="1.6"/>
+  <g fill="#1c3f6e" font-size="30">
+    <text x="115" y="90" font-size="36" fill="#14304f">Tues — site visit</text>
+    <text x="115" y="143">Marcus Whiting</text>
+    <text x="115" y="193">021 447 8892</text>
+    <text x="115" y="243">14 Rimu Grove, Karori</text>
+    <text x="115" y="293" fill="#7a2d2d">kitchen + laundry rewire</text>
+    <text x="115" y="343">old switchboard, no RCDs</text>
+    <text x="115" y="393">— replace board 8 way</text>
+    <text x="115" y="443">— 6 x LED downlights kitchen</text>
+    <text x="115" y="493">— 4 new double GPOs</text>
+    <text x="115" y="543">— run new circuit laundry</text>
+    <text x="115" y="593">— dishwasher point</text>
+    <text x="115" y="643" fill="#7a2d2d">allow $400 gib repair</text>
+    <text x="115" y="693">labour approx 2.5 days</text>
+    <text x="115" y="743" opacity="0.55" transform="rotate(-1.5 115 743)">ph aft 4pm ?? sig??</text>
+    <text x="115" y="793">wants done b4 Xmas</text>
+    <text x="115" y="843" font-size="26" opacity="0.8">park on street — no drive</text>
+  </g>
+  <rect width="800" height="1100" filter="url(#grain)" opacity="0.5" fill="none"/>
+</svg>

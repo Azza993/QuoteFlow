@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1100" width="800" height="1100" font-family="'Bradley Hand','Segoe Print','Comic Sans MS','Chalkboard SE',cursive">
+  <defs>
+    <linearGradient id="paper2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf5"/><stop offset="1" stop-color="#f4eee0"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="1100" fill="url(#paper2)"/>
+  <g stroke="#d5dde7" stroke-width="1.2">
+    <line x1="60" y1="150" x2="760" y2="150"/><line x1="60" y1="210" x2="760" y2="210"/>
+    <line x1="60" y1="270" x2="760" y2="270"/><line x1="60" y1="330" x2="760" y2="330"/>
+    <line x1="60" y1="390" x2="760" y2="390"/><line x1="60" y1="450" x2="760" y2="450"/>
+    <line x1="60" y1="510" x2="760" y2="510"/><line x1="60" y1="570" x2="760" y2="570"/>
+    <line x1="60" y1="630" x2="760" y2="630"/><line x1="60" y1="690" x2="760" y2="690"/>
+    <line x1="60" y1="750" x2="760" y2="750"/><line x1="60" y1="810" x2="760" y2="810"/>
+  </g>
+  <g fill="#1c3f6e" font-size="30">
+    <text x="90" y="90" font-size="34" fill="#14304f">page 2 — prices</text>
+    <text x="90" y="143">board 8 way  ~ 1450</text>
+    <text x="90" y="203">downlights 6 @ 85</text>
+    <text x="90" y="263">GPOs 4 @ 120</text>
+    <text x="90" y="323">laundry circuit  680</text>
+    <text x="90" y="383">dishwasher pt  240</text>
+    <text x="90" y="443" opacity="0.45" transform="rotate(-2 90 443)">labour 2.5d @ ?? /hr</text>
+    <text x="90" y="503" fill="#7a2d2d">gib repair allow 400</text>
+    <text x="90" y="563" font-size="26" opacity="0.7">chk stock w/ supplier mon</text>
+    <text x="90" y="623" font-size="26" opacity="0.75">COF? — no, other job</text>
+  </g>
+</svg>
