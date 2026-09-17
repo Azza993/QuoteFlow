@@ -140,3 +140,46 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 grant execute on function public_quote(text) to anon, authenticated;
+
+-- ------------------------------------------------------------ note storage
+-- Scan photos are private business data. Store them outside the database in a
+-- private bucket and keep only durable object paths in note_scans.image_urls.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'note-scans',
+  'note-scans',
+  false,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+-- Object paths are `<business_id>/<scan_id>/<random-file>`. The first folder
+-- is the business id, so storage access can be tied to the same ownership
+-- function used by the relational tables.
+drop policy if exists note_scan_objects_owner_insert on storage.objects;
+create policy note_scan_objects_owner_insert on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'note-scans'
+    and (storage.foldername(name))[1] in (select owned_business_ids()::text)
+  );
+
+drop policy if exists note_scan_objects_owner_select on storage.objects;
+create policy note_scan_objects_owner_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'note-scans'
+    and (storage.foldername(name))[1] in (select owned_business_ids()::text)
+  );
+
+drop policy if exists note_scan_objects_owner_delete on storage.objects;
+create policy note_scan_objects_owner_delete on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'note-scans'
+    and (storage.foldername(name))[1] in (select owned_business_ids()::text)
+  );
