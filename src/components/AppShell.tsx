@@ -1,8 +1,9 @@
 import { NavLink, Link, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { BookOpen, FileText, LayoutDashboard, Plus, Settings, Users } from 'lucide-react'
+import { BookOpen, FileText, LayoutDashboard, LogOut, Plus, Settings, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useData } from '@/hooks/use-data'
+import { useAuth } from '@/hooks/use-auth'
 import { Button } from './ui/button'
 
 /** Screens where "New quote" is the obvious next thing to do. */
@@ -18,15 +19,10 @@ const NAV = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { business, dueFollowUps } = useData()
+  const { configured, signOut } = useAuth()
   const { pathname } = useLocation()
 
-  // The New Quote button is the app's one persistent call to action, so in the
-  // header it is hidden only on the screens where you are already making one.
   const hideNewQuote = pathname.startsWith('/quotes/new') || pathname.startsWith('/scan')
-
-  // The floating version is stricter. Working screens (the builder, the review
-  // screen, settings) put their own confirm bar at the bottom of a phone
-  // screen, and a floating button would sit right on top of it.
   const showFloatingNewQuote = OVERVIEW_PATHS.has(pathname)
 
   return (
@@ -76,6 +72,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link to="/quotes/new">
                 <Plus /> New quote
               </Link>
+            </Button>
+          ) : null}
+
+          {configured ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={hideNewQuote ? 'ml-auto' : ''}
+              title="Sign out"
+              aria-label="Sign out"
+              onClick={() => void signOut()}
+            >
+              <LogOut />
             </Button>
           ) : null}
         </div>
