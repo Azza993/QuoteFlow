@@ -10,6 +10,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, businessName: string) => Promise<{ confirmationRequired: boolean }>
   resetPassword: (email: string) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -65,6 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth?mode=reset`,
       })
+      if (error) throw new Error(error.message)
+    },
+    updatePassword: async (password) => {
+      const { error } = await getSupabase().auth.updateUser({ password })
       if (error) throw new Error(error.message)
     },
     signOut: async () => {
