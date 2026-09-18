@@ -200,7 +200,7 @@ export class SupabaseRepository implements Repository {
     const result = unwrap(await this.db.rpc('decide_quote', { p_quote_id: quoteId, p_decision: decision })) as
       { ok: boolean; quote: Record<string, unknown>; job: Record<string, unknown> | null; already_decided?: boolean }
     if (!result.ok) throw new Error('Could not update the quote lifecycle.')
-    return { quote: toQuote(result.quote), job: result.job ? result.job as Job : null, alreadyDecided: result.already_decided }
+    return { quote: toQuote(result.quote), job: result.job ? (result.job as unknown as Job) : null, alreadyDecided: result.already_decided }
   }
 
   async loadPublicQuote(token: string): Promise<PublicQuoteView | null> {
