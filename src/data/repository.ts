@@ -71,7 +71,7 @@ export interface Repository {
   /** Public, token-addressed read used by the customer-facing quote view. */
   loadPublicQuote(token: string): Promise<PublicQuoteView | null>
   /** The only write a customer can make: accept or decline. */
-  decidePublicQuote(token: string, decision: 'accepted' | 'declined'): Promise<void>
+  decideQuote(quoteId: string, decision: 'accepted' | 'declined'): Promise<{ quote: Quote; job: Job | null; alreadyDecided?: boolean }>\n  decidePublicQuote(token: string, decision: 'accepted' | 'declined'): Promise<void>
 
   /** Restore the seeded demo data. Only meaningful for the demo backend. */
   resetDemoData?(): Promise<Snapshot>
