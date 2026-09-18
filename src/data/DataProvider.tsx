@@ -10,7 +10,7 @@ import {
   createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react'
 import type {
-  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem,
+  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem, QuoteRevision, QuoteRevisionItem,
 } from '@/types/domain'
 import { createRepository } from '.'
 import type { Repository, Snapshot } from './repository'
@@ -23,7 +23,7 @@ import { nowIso } from '@/lib/dates'
 import { newId } from '@/lib/utils'
 
 const EMPTY: Snapshot = {
-  business: {
+  revisions: [], revisionItems: [],\n  business: {
     id: '', business_name: '', logo_url: null, gst_inclusive: false, gst_rate: 0.15,
     tax_label: 'GST', currency_code: 'NZD', default_terms: '', default_validity_days: 30,
     contact_email: null, contact_phone: null, address: null, created_at: '',
@@ -58,7 +58,7 @@ export interface DataContextValue extends Snapshot {
   removeCustomer: (id: string) => Promise<void>
 
   createQuote: (overrides?: Partial<Quote>) => Promise<Quote>
-  saveQuote: (quote: Quote) => Promise<Quote>
+  saveQuote: (quote: Quote) => Promise<Quote>\n  saveQuoteRevision: (quote: Quote, items: QuoteItem[]) => Promise<QuoteRevision>
   saveQuoteItems: (quoteId: string, items: QuoteItem[]) => Promise<void>
   removeQuote: (id: string) => Promise<void>
   duplicateQuote: (quoteId: string) => Promise<Quote>
@@ -318,6 +318,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [repo, commit],
   )
 
+  const saveQuoteRevision = useCallback(
+    async (quote: Quote, items: QuoteItem[]) => {
+      if (quote.status === 'draft') throw new Error('Draft quotes should be saved normally.')
+      const totals = withRecalculatedTotals(quote, items)
+      const result = await repo().createQuoteRevision(totals, items)
+      commit((s) => ({
+        ...s,
+        revisions: [...s.revisions.filter((r) => r.id !== result.revision.id), result.revision],
+        revisionItems: [...s.revisionItems.filter((i) => i.revision_id !== result.revision.id), ...result.items],
+      }))
+      return result.revision
+    },
+    [repo, commit],
+  )
+
   const createQuote = useCallback(
     (overrides: Partial<Quote> = {}) =>
       saveQuote(
@@ -555,7 +570,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       quoteById, itemsForQuote, customerById, customerForQuote, followUpsForQuote,
       scanForQuote, jobForQuote, dueFollowUps, stats,
       saveBusiness, saveCustomer, createCustomer, removeCustomer,
-      createQuote, saveQuote, saveQuoteItems, removeQuote, duplicateQuote,
+      createQuote, saveQuote, saveQuoteRevision, saveQuoteItems, removeQuote, duplicateQuote,
       markSent, markAccepted, markDeclined, reopenQuote,
       saveFollowUp, completeFollowUp, skipFollowUp, scheduleFollowUp,
       savePriceBookItem, removePriceBookItem, saveNoteScan,
@@ -565,7 +580,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       snapshot, loading, error, repository, quoteById, itemsForQuote, customerById,
       customerForQuote, followUpsForQuote, scanForQuote, jobForQuote, dueFollowUps, stats,
       saveBusiness, saveCustomer, createCustomer, removeCustomer, createQuote, saveQuote,
-      saveQuoteItems, removeQuote, duplicateQuote, markSent, markAccepted, markDeclined,
+      saveQuoteRevision, saveQuoteItems, removeQuote, duplicateQuote, markSent, markAccepted, markDeclined,
       reopenQuote, saveFollowUp, completeFollowUp, skipFollowUp, scheduleFollowUp,
       savePriceBookItem, removePriceBookItem, saveNoteScan, refresh, resetDemoData,
     ],
