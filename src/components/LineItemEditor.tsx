@@ -277,6 +277,7 @@ function QuantityInput({
       step="0.25"
       value={draft}
       onFocus={handleFocus}
+      onBlur={handleBlur}
       onChange={(event) => handleChange(event.target.value)}
       aria-label="Quantity"
     />
