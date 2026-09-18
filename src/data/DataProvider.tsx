@@ -10,13 +10,13 @@ import {
   createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react'
 import type {
-  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem,
+  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem, QuoteRevision,
 } from '@/types/domain'
 import { createRepository } from '.'
 import type { Repository, Snapshot } from './repository'
 import {
   cancelPendingFollowUps, computeStats, createDraftQuote,
-  declineQuote, duplicateQuote as buildDuplicate, expireQuote, findLapsedQuotes,
+  duplicateQuote as buildDuplicate, expireQuote, findLapsedQuotes,
   resequence, sendQuote, withRecalculatedTotals, buildFollowUpSchedule, type QuoteStats,
 } from './actions'
 import { nowIso } from '@/lib/dates'
@@ -356,7 +356,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       // Totals are recomputed here, from the items, every single time. There
       // is no path in the app that writes a total from anywhere else.
-      const quote = snapshotRef.current.quotes.find((q) => q.id === quoteId)
       const updated = quote ? withRecalculatedTotals(quote, ordered) : undefined
       if (updated) await repo().upsertQuote(updated)
 
