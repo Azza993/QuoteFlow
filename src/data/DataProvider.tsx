@@ -450,7 +450,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const { quote: sent, followUps } = sendQuote(
         quote, customerName, live.business.default_validity_days,
       )
-      await repo().upsertQuote(sent)
+      const sent = await repo().sendQuote(quoteId)
       // Sending is what lays down the follow-up schedule.
       await repo().replaceFollowUps(quoteId, followUps)
 
