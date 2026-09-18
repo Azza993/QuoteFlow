@@ -76,7 +76,7 @@ export interface Quote {
   decided_at: string | null
 }
 
-export interface QuoteItem {
+export interface QuoteRevision {\n  id: string\n  quote_id: string\n  business_id: string\n  revision_number: number\n  customer_id: string | null\n  site_address: string | null\n  scope_summary: string | null\n  gst_inclusive: boolean\n  gst_rate: number\n  subtotal: number\n  gst_amount: number\n  total: number\n  valid_until: string | null\n  terms: string | null\n  source: QuoteSource\n  public_token: string | null\n  status: QuoteStatus\n  created_by: string | null\n  created_at: string\n  sent_at: string | null\n  decided_at: string | null\n}\n\nexport interface QuoteRevisionItem {\n  id: string\n  revision_id: string\n  description: string\n  quantity: number\n  unit: string\n  cost: number | null\n  markup: number | null\n  selling_price: number\n  type: LineItemType\n  notes: string | null\n  sort_order: number\n}\n\nexport interface QuoteItem {
   id: string
   quote_id: string
   description: string
