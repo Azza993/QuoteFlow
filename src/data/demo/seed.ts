@@ -469,6 +469,8 @@ export function buildSeedSnapshot(): Snapshot {
     followUps,
     jobs,
     noteScans,
+    revisions: [],
+    revisionItems: [],
   })
 }
 
