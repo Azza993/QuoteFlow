@@ -9,7 +9,7 @@ import { publicTokenFor } from '../repository'
 import type {
   BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem, QuoteRevision, QuoteRevisionItem,
 } from '@/types/domain'
-import { nowIso } from '@/lib/dates'
+import { nowIso } from '@/lib/dates'\nimport { newId } from '@/lib/utils'
 import { buildSeedSnapshot } from './seed'
 
 const STORAGE_KEY = 'quoteflow.demo.v1'
