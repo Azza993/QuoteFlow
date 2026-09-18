@@ -192,6 +192,26 @@ export class DemoRepository implements Repository {
     return fileToDataUrl(file)
   }
 
+  decideQuote(quoteId: string, decision: 'accepted' | 'declined'): Promise<{ quote: Quote; job: Job | null; alreadyDecided?: boolean }> {
+    return this.commit((s) => {
+      const quote = s.quotes.find((q) => q.id === quoteId)
+      if (!quote) throw new Error('Quote not found')
+      if (quote.status === decision) return { quote: structuredClone(quote), job: s.jobs.find((j) => j.quote_id === quote.id) ?? null, alreadyDecided: true }
+      if (quote.status !== 'sent') throw new Error('Quote is not awaiting a decision.')
+      let job = s.jobs.find((j) => j.quote_id === quote.id) ?? null
+      if (decision === 'accepted') {
+        if (!job) {
+          job = { id: newId(), business_id: quote.business_id, customer_id: quote.customer_id, quote_id: quote.id,
+            site_address: quote.site_address, scope_summary: quote.scope_summary, created_at: nowIso() }
+          s.jobs = upsertInto(s.jobs, job)
+        }
+      }
+      const updated = { ...quote, status: decision, decided_at: nowIso(), job_id: job?.id ?? null }
+      s.quotes = s.quotes.map((q) => q.id === quote.id ? updated : q)
+      return { quote: structuredClone(updated), job: job ? structuredClone(job) : null }
+    })
+  }
+
   loadPublicQuote(token: string): Promise<PublicQuoteView | null> {
     const quote = this.snapshot.quotes.find((q) => publicTokenFor(q.id) === token)
     if (!quote || quote.status === 'draft') return Promise.resolve(null)
