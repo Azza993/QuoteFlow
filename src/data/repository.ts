@@ -54,7 +54,9 @@ export interface Repository {
   upsertQuote(quote: Quote): Promise<Quote>
   deleteQuote(id: string): Promise<void>
   /** Items are always written as a complete, ordered set for one quote. */
-  replaceQuoteItems(quoteId: string, items: QuoteItem[]): Promise<QuoteItem[]>\n  createQuoteRevision(quote: Quote, items: QuoteItem[]): Promise<{ revision: QuoteRevision; items: QuoteRevisionItem[] }>\n  sendQuoteRevision(revisionId: string): Promise<QuoteRevision>
+  replaceQuoteItems(quoteId: string, items: QuoteItem[]): Promise<QuoteItem[]>
+  createQuoteRevision(quote: Quote, items: QuoteItem[]): Promise<{ revision: QuoteRevision; items: QuoteRevisionItem[] }>
+  sendQuoteRevision(revisionId: string): Promise<QuoteRevision>
 
   upsertPriceBookItem(item: PriceBookItem): Promise<PriceBookItem>
   deletePriceBookItem(id: string): Promise<void>
@@ -71,7 +73,8 @@ export interface Repository {
   /** Public, token-addressed read used by the customer-facing quote view. */
   loadPublicQuote(token: string): Promise<PublicQuoteView | null>
   /** The only write a customer can make: accept or decline. */
-  decideQuote(quoteId: string, decision: 'accepted' | 'declined'): Promise<{ quote: Quote; job: Job | null; alreadyDecided?: boolean }>\n  decidePublicQuote(token: string, decision: 'accepted' | 'declined'): Promise<void>
+  decideQuote(quoteId: string, decision: 'accepted' | 'declined'): Promise<{ quote: Quote; job: Job | null; alreadyDecided?: boolean }>
+  decidePublicQuote(token: string, decision: 'accepted' | 'declined'): Promise<void>
 
   /** Restore the seeded demo data. Only meaningful for the demo backend. */
   resetDemoData?(): Promise<Snapshot>
