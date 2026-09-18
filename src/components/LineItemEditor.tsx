@@ -88,11 +88,11 @@ export function LineItemEditor({
             <div className="space-y-1.5">
               <Label htmlFor={`cost-${item.id}`}>Your cost (optional)</Label>
               <MoneyInput id={`cost-${item.id}`} value={item.cost} onChange={setCost} placeholder="—" />
-              {item.type === 'material' ? <p className="text-xs text-ink-500">Material markup default: <strong>{defaultMaterialMarkup}%</strong></p> : null}
+              {item.type === 'material' ? <p className="text-xs text-ink-500">Enter your cost to apply the <strong>{defaultMaterialMarkup}%</strong> material markup.</p> : null}
             </div>
             <div className="space-y-1.5">
               <Label>Markup</Label>
-              <p className="rounded-xl bg-ink-50 px-3 py-2.5 text-sm text-ink-600">{item.markup === null ? '—' : `${item.markup}%`} <span className="text-xs text-ink-400">(from quote defaults)</span></p>
+              <p className="rounded-xl bg-ink-50 px-3 py-2.5 text-sm text-ink-600">{item.markup === null ? '—' : `${item.markup}%`} <span className="text-xs text-ink-400">{item.markup === null ? '(enter a cost to apply)' : '(from quote defaults)'}</span></p>
             </div>
             <div className="col-span-2 space-y-1.5">
               <Label htmlFor={`notes-${item.id}`}>Notes (shown on the quote)</Label>
