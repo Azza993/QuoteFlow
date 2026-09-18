@@ -54,6 +54,7 @@ export interface Repository {
   deleteCustomer(id: string): Promise<void>
 
   upsertQuote(quote: Quote): Promise<Quote>
+  sendQuote(quoteId: string): Promise<Quote>
   deleteQuote(id: string): Promise<void>
   /** Items are always written as a complete, ordered set for one quote. */
   replaceQuoteItems(quoteId: string, items: QuoteItem[]): Promise<QuoteItem[]>
