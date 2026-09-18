@@ -132,8 +132,9 @@ export function QuoteBuilder() {
 
       {quote.status !== 'draft' ? (
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          This quote has already been accepted. Changes are saved as a revision and won't replace the
-          accepted quote until the revised quote is sent to the customer.
+          {quote.status === 'accepted'
+            ? "This quote has already been accepted. Changes are saved as a revision and won't replace the accepted quote until the revised quote is sent to the customer."
+            : "This quote has already been sent. Changes are saved as a revision and won't replace the sent quote until the revised quote is sent to the customer."}
         </div>
       ) : null}
 
