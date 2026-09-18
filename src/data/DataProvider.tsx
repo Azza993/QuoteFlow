@@ -447,7 +447,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return
       }
       const customerName = live.customers.find((c) => c.id === quote.customer_id)?.name ?? ''
-      const { quote: sent, followUps } = sendQuote(
+      const { followUps } = sendQuote(
         quote, customerName, live.business.default_validity_days,
       )
       const sent = await repo().sendQuote(quoteId)
