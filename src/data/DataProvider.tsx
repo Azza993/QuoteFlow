@@ -19,7 +19,8 @@ import {
   duplicateQuote as buildDuplicate, expireQuote, findLapsedQuotes,
   resequence, sendQuote, withRecalculatedTotals, type QuoteStats,
 } from './actions'
-import { nowIso } from '@/lib/dates'\nimport { buildFollowUpSchedule } from '@/lib/follow-ups'
+import { nowIso } from '@/lib/dates'
+import { buildFollowUpSchedule } from '@/lib/follow-ups'
 import { newId } from '@/lib/utils'
 
 const EMPTY: Snapshot = {
