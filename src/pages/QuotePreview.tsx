@@ -26,11 +26,19 @@ export function QuotePreview() {
 
   if (!quote) return <NotFound />
 
-  const latestRevision = revisions\n    .filter((r) => r.quote_id === quote.id)\n    .sort((a, b) => b.revision_number - a.revision_number)[0]\n  const displayQuote = latestRevision ? { ...quote, ...latestRevision, id: quote.id, quote_number: quote.quote_number } : quote\n  const items = latestRevision\n    ? revisionItems.filter((i) => i.revision_id === latestRevision.id).sort((a, b) => a.sort_order - b.sort_order).map((i) => ({ ...i, quote_id: quote.id }))\n    : itemsForQuote(quote.id)
+  const latestRevision = revisions
+    .filter((r) => r.quote_id === quote.id)
+    .sort((a, b) => b.revision_number - a.revision_number)[0]
+  const displayQuote = latestRevision ? { ...quote, ...latestRevision, id: quote.id, quote_number: quote.quote_number } : quote
+  const items = latestRevision
+    ? revisionItems.filter((i) => i.revision_id === latestRevision.id).sort((a, b) => a.sort_order - b.sort_order).map((i) => ({ ...i, quote_id: quote.id }))
+    : itemsForQuote(quote.id)
   const customer = customerForQuote(displayQuote) ?? null
   // Supabase generates an opaque token that must be used verbatim. The
   // deterministic helper remains only as a demo-backend fallback.
-  const token = latestRevision?.status !== 'draft' && latestRevision?.public_token\n    ? latestRevision.public_token\n    : quote.public_token ?? publicTokenFor(quote.id)
+  const token = latestRevision?.status !== 'draft' && latestRevision?.public_token
+    ? latestRevision.public_token
+    : quote.public_token ?? publicTokenFor(quote.id)
   const publicUrl = `${window.location.origin}/q/${token}`
 
   const emailBody = buildEmailBody()
