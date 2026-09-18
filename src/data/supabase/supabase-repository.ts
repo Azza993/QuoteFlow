@@ -31,7 +31,13 @@ const nullableNum = (value: unknown): number | null =>
 const toQuote = (row: Record<string, unknown>): Quote =>
   ({ ...row, gst_rate: num(row.gst_rate), subtotal: num(row.subtotal), gst_amount: num(row.gst_amount), total: num(row.total) }) as Quote
 
-const toRevision = (row: Record<string, unknown>): QuoteRevision =>\n  ({ ...row, gst_rate: num(row.gst_rate), subtotal: num(row.subtotal), gst_amount: num(row.gst_amount), total: num(row.total) }) as QuoteRevision\n\nconst toRevisionItem = (row: Record<string, unknown>): QuoteRevisionItem =>\n  ({ ...row, quantity: num(row.quantity, 1), cost: nullableNum(row.cost), markup: nullableNum(row.markup), selling_price: num(row.selling_price) }) as QuoteRevisionItem\n\nconst toQuoteItem = (row: Record<string, unknown>): QuoteItem =>
+const toRevision = (row: Record<string, unknown>): QuoteRevision =>
+  ({ ...row, gst_rate: num(row.gst_rate), subtotal: num(row.subtotal), gst_amount: num(row.gst_amount), total: num(row.total) }) as QuoteRevision
+
+const toRevisionItem = (row: Record<string, unknown>): QuoteRevisionItem =>
+  ({ ...row, quantity: num(row.quantity, 1), cost: nullableNum(row.cost), markup: nullableNum(row.markup), selling_price: num(row.selling_price) }) as QuoteRevisionItem
+
+const toQuoteItem = (row: Record<string, unknown>): QuoteItem =>
   ({ ...row, quantity: num(row.quantity, 1), cost: nullableNum(row.cost), markup: nullableNum(row.markup), selling_price: num(row.selling_price) }) as QuoteItem
 
 const toPriceBookItem = (row: Record<string, unknown>): PriceBookItem =>
@@ -66,7 +72,9 @@ export class SupabaseRepository implements Repository {
       this.db.from('price_book_items').select('*').eq('business_id', business.id).order('name'),
       this.db.from('follow_ups').select('*').order('scheduled_for'),
       this.db.from('jobs').select('*').eq('business_id', business.id).order('created_at', { ascending: false }),
-      this.db.from('note_scans').select('*').order('created_at', { ascending: false }),\n      this.db.from('quote_revisions').select('*').eq('business_id', business.id).order('revision_number', { ascending: false }),\n      this.db.from('quote_revision_items').select('*').order('sort_order'),
+      this.db.from('note_scans').select('*').order('created_at', { ascending: false }),
+      this.db.from('quote_revisions').select('*').eq('business_id', business.id).order('revision_number', { ascending: false }),
+      this.db.from('quote_revision_items').select('*').order('sort_order'),
     ])
 
     return {
@@ -77,7 +85,9 @@ export class SupabaseRepository implements Repository {
       priceBook: (unwrap(priceBook) as Record<string, unknown>[]).map(toPriceBookItem),
       followUps: unwrap(followUps) as FollowUp[],
       jobs: unwrap(jobs) as Job[],
-      noteScans: unwrap(noteScans) as NoteScan[],\n      revisions: (unwrap(revisions) as Record<string, unknown>[]).map(toRevision),\n      revisionItems: (unwrap(revisionItems) as Record<string, unknown>[]).map(toRevisionItem),
+      noteScans: unwrap(noteScans) as NoteScan[],
+      revisions: (unwrap(revisions) as Record<string, unknown>[]).map(toRevision),
+      revisionItems: (unwrap(revisionItems) as Record<string, unknown>[]).map(toRevisionItem),
     }
   }
 
