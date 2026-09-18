@@ -17,7 +17,7 @@ import type { Repository, Snapshot } from './repository'
 import {
   acceptQuote, cancelPendingFollowUps, computeStats, createDraftQuote,
   declineQuote, duplicateQuote as buildDuplicate, expireQuote, findLapsedQuotes,
-  resequence, sendQuote, withRecalculatedTotals, type QuoteStats,
+  resequence, sendQuote, withRecalculatedTotals, buildFollowUpSchedule, type QuoteStats,
 } from './actions'
 import { nowIso } from '@/lib/dates'
 import { newId } from '@/lib/utils'
@@ -424,9 +424,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
           .sort((a, b) => b.revision_number - a.revision_number)[0]
         if (!pendingRevision) throw new Error('Save the revised quote before sending it.')
         const sentRevision = await repo().sendQuoteRevision(pendingRevision.id)
+        const revisionQuote: Quote = {
+          ...quote,
+          customer_id: sentRevision.customer_id,
+          site_address: sentRevision.site_address,
+          scope_summary: sentRevision.scope_summary,
+          gst_inclusive: sentRevision.gst_inclusive,
+          gst_rate: sentRevision.gst_rate,
+          subtotal: sentRevision.subtotal,
+          gst_amount: sentRevision.gst_amount,
+          total: sentRevision.total,
+          valid_until: sentRevision.valid_until,
+          terms: sentRevision.terms,
+          sent_at: sentRevision.sent_at,
+        }
+        const customerName = live.customers.find((c) => c.id === sentRevision.customer_id)?.name ?? ''
+        const followUps = buildFollowUpSchedule(revisionQuote, customerName)
+        await repo().replaceFollowUps(quoteId, followUps)
         commit((s) => ({
           ...s,
           revisions: s.revisions.map((r) => r.id === sentRevision.id ? sentRevision : r),
+          followUps: [...s.followUps.filter((f) => f.quote_id !== quoteId), ...followUps],
         }))
         return
       }
