@@ -23,7 +23,8 @@ import { nowIso } from '@/lib/dates'
 import { newId } from '@/lib/utils'
 
 const EMPTY: Snapshot = {
-  revisions: [], revisionItems: [],\n  business: {
+  revisions: [], revisionItems: [],
+  business: {
     id: '', business_name: '', logo_url: null, gst_inclusive: false, gst_rate: 0.15,
     tax_label: 'GST', currency_code: 'NZD', default_terms: '', default_validity_days: 30,
     contact_email: null, contact_phone: null, address: null, created_at: '',
@@ -58,7 +59,8 @@ export interface DataContextValue extends Snapshot {
   removeCustomer: (id: string) => Promise<void>
 
   createQuote: (overrides?: Partial<Quote>) => Promise<Quote>
-  saveQuote: (quote: Quote) => Promise<Quote>\n  saveQuoteRevision: (quote: Quote, items: QuoteItem[]) => Promise<QuoteRevision>
+  saveQuote: (quote: Quote) => Promise<Quote>
+  saveQuoteRevision: (quote: Quote, items: QuoteItem[]) => Promise<QuoteRevision>
   saveQuoteItems: (quoteId: string, items: QuoteItem[]) => Promise<void>
   removeQuote: (id: string) => Promise<void>
   duplicateQuote: (quoteId: string) => Promise<Quote>
