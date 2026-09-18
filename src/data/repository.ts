@@ -31,6 +31,8 @@ export interface Snapshot {
   followUps: FollowUp[]
   jobs: Job[]
   noteScans: NoteScan[]
+  revisions: QuoteRevision[]
+  revisionItems: QuoteRevisionItem[]
 }
 
 /** What a customer sees behind a public quote link. */
