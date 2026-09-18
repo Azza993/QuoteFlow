@@ -10,7 +10,7 @@ import {
   createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react'
 import type {
-  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem, QuoteRevision, QuoteRevisionItem,
+  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem,
 } from '@/types/domain'
 import { createRepository } from '.'
 import type { Repository, Snapshot } from './repository'
