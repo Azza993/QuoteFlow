@@ -467,31 +467,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const settleQuote = useCallback(
     async (quoteId: string, decision: 'accepted' | 'declined') => {
-      const quote = snapshotRef.current.quotes.find((q) => q.id === quoteId)
-      if (!quote) return
-      if (quote.status === 'accepted' && decision === 'accepted') return
-
-      let updated: Quote
-      let job: Job | null = null
-      if (decision === 'accepted') {
-        const result = acceptQuote(quote)
-        updated = result.quote
-        job = result.job
-        await repo().upsertJob(job)
-      } else {
-        updated = declineQuote(quote)
-      }
-      await repo().upsertQuote(updated)
-
+      const result = await repo().decideQuote(quoteId, decision)
       const cancelled = cancelPendingFollowUps(
         snapshotRef.current.followUps.filter((f) => f.quote_id === quoteId),
       )
       await Promise.all(cancelled.map((f) => repo().upsertFollowUp(f)))
-
       commit((s) => ({
         ...s,
-        quotes: s.quotes.map((q) => (q.id === quoteId ? updated : q)),
-        jobs: job ? [job, ...s.jobs] : s.jobs,
+        quotes: s.quotes.map((q) => (q.id === quoteId ? result.quote : q)),
+        jobs: result.job
+          ? [result.job, ...s.jobs.filter((j) => j.id !== result.job!.id)]
+          : s.jobs,
         followUps: s.followUps.map((f) => cancelled.find((c) => c.id === f.id) ?? f),
       }))
     },
