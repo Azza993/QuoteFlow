@@ -7,7 +7,7 @@
 import type { Repository, Snapshot, PublicQuoteView } from '../repository'
 import { publicTokenFor } from '../repository'
 import type {
-  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem,
+  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem, QuoteRevision, QuoteRevisionItem,
 } from '@/types/domain'
 import { nowIso } from '@/lib/dates'
 import { buildSeedSnapshot } from './seed'
@@ -111,6 +111,37 @@ export class DemoRepository implements Repository {
     return this.commit((s) => {
       s.quoteItems = [...s.quoteItems.filter((i) => i.quote_id !== quoteId), ...items]
       return items
+    })
+  }
+
+  createQuoteRevision(quote: Quote, items: QuoteItem[]): Promise<{ revision: QuoteRevision; items: QuoteRevisionItem[] }> {
+    return this.commit((s) => {
+      const revisionNumber = Math.max(0, ...s.revisions.filter((r) => r.quote_id === quote.id).map((r) => r.revision_number)) + 1
+      const revision: QuoteRevision = {
+        id: newId(), quote_id: quote.id, business_id: quote.business_id, revision_number: revisionNumber,
+        customer_id: quote.customer_id, site_address: quote.site_address, scope_summary: quote.scope_summary,
+        gst_inclusive: quote.gst_inclusive, gst_rate: quote.gst_rate, subtotal: quote.subtotal,
+        gst_amount: quote.gst_amount, total: quote.total, valid_until: quote.valid_until, terms: quote.terms,
+        source: quote.source, public_token: newId(), status: 'draft', created_by: null, created_at: nowIso(),
+        sent_at: null, decided_at: null,
+      }
+      const revisionItems: QuoteRevisionItem[] = items.map((item, index) => ({
+        id: newId(), revision_id: revision.id, description: item.description, quantity: item.quantity,
+        unit: item.unit, cost: item.cost, markup: item.markup, selling_price: item.selling_price,
+        type: item.type, notes: item.notes, sort_order: index,
+      }))
+      s.revisions.push(revision); s.revisionItems.push(...revisionItems)
+      return { revision, items: revisionItems }
+    })
+  }
+
+  sendQuoteRevision(revisionId: string): Promise<QuoteRevision> {
+    return this.commit((s) => {
+      const revision = s.revisions.find((r) => r.id === revisionId)
+      if (!revision || revision.status !== 'draft') throw new Error('Only a pending revision can be sent.')
+      const sent = { ...revision, status: 'sent' as const, sent_at: nowIso() }
+      s.revisions = s.revisions.map((r) => r.id === revisionId ? sent : r)
+      return sent
     })
   }
 
