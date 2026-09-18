@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, type InputHTMLAttributes } from 'react'
 import { ChevronDown, GripVertical, Trash2 } from 'lucide-react'
 import type { LineItemType, QuoteItem } from '@/types/domain'
 import { LINE_ITEM_TYPES } from '@/types/domain'
@@ -106,7 +106,7 @@ export function LineItemEditor({
   )
 }
 
-function QuantityInput({ value, onChange, ...props }: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value'|'onChange'> & { value:number; onChange:(value:number)=>void }) {
+function QuantityInput({ value, onChange, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, 'value'|'onChange'> & { value:number; onChange:(value:number)=>void }) {
   const [draft,setDraft]=useState(() => String(value))
   const handleChange=(raw:string)=>{
     const cleaned=raw.replace(/[^0-9.]/g,''); const [whole,...decimalParts]=cleaned.split('.')
@@ -119,15 +119,34 @@ function QuantityInput({ value, onChange, ...props }: Omit<React.InputHTMLAttrib
   return <Input {...props} type="text" inputMode="decimal" min="0" step="0.25" value={draft} onFocus={(e)=>{if(draft==='0')e.currentTarget.select()}} onBlur={()=>{const parsed=Number.parseFloat(draft); if(Number.isFinite(parsed)&&parsed>=0){setDraft(String(parsed));onChange(parsed)} else setDraft(String(value))}} onChange={(e)=>handleChange(e.target.value)} aria-label="Quantity" />
 }
 
-function MoneyInput({ value, onChange, ...props }: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value'|'onChange'> & { value:number|null; onChange:(value:string)=>void }) {
+function MoneyInput({ value, onChange, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, 'value'|'onChange'> & { value:number|null; onChange:(value:string)=>void }) {
   const [draft,setDraft]=useState(() => centsToInput(value))
+
+  // Sync parent-driven amount changes (GST conversion or material markup)
+  // without overwriting normal keystrokes while the user is editing.
+  useEffect(() => {
+    const draftCents = inputToCents(draft)
+    if (draftCents !== value) setDraft(centsToInput(value))
+  }, [value, draft])
+
   const handleChange=(raw:string)=>{
     const cleaned=raw.replace(/[^0-9.]/g,''); const [whole,...decimalParts]=cleaned.split('.')
     const normalisedWhole=whole.replace(/^0+(?=\d)/,'') || (cleaned.includes('.')?'0':'')
     const normalised=decimalParts.length>0?`${normalisedWhole}.${decimalParts.join('')}`:normalisedWhole
     setDraft(normalised); onChange(normalised)
   }
-  return <Input {...props} type="text" inputMode="decimal" value={draft} onFocus={(e)=>{if(draft==='0.00'||draft==='')e.currentTarget.select()}} onBlur={()=>{const cents=inputToCents(draft);setDraft(centsToInput(cents??0));onChange(draft)}} onChange={(e)=>handleChange(e.target.value)} />
+  const handleBlur = () => {
+    const cents = inputToCents(draft)
+    if (cents === null) {
+      setDraft('')
+      onChange('')
+      return
+    }
+    setDraft(centsToInput(cents))
+    onChange(String(cents / 100))
+  }
+
+  return <Input {...props} type="text" inputMode="decimal" value={draft} onFocus={(e)=>{if(draft==='0.00'||draft==='')e.currentTarget.select()}} onBlur={handleBlur} onChange={(e)=>handleChange(e.target.value)} />
 }
 
 export { TYPE_LABEL }
