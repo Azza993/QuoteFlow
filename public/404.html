@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuoteFlow</title>
+    <script>
+      (function () {
+        var target = window.location.pathname + window.location.search + window.location.hash;
+        if (target.indexOf('/QuoteFlow/') === 0) {
+          sessionStorage.setItem('quoteflow:github-pages-redirect', target);
+          window.location.replace('/QuoteFlow/');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <p>Loading QuoteFlow…</p>
+  </body>
+</html>
