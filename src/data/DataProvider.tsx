@@ -306,6 +306,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const saveQuote = useCallback(
     async (quote: Quote) => {
+      const current = snapshotRef.current.quotes.find((q) => q.id === quote.id)
+      if (current && current.status !== 'draft' && (
+        quote.customer_id !== current.customer_id ||
+        quote.site_address !== current.site_address ||
+        quote.scope_summary !== current.scope_summary ||
+        quote.terms !== current.terms ||
+        quote.total !== current.total
+      )) throw new Error('This quote has already been sent. Save changes as a revision instead.')
       const saved = await repo().upsertQuote(quote)
       commit((s) => ({
         ...s,
@@ -344,6 +352,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const saveQuoteItems = useCallback(
     async (quoteId: string, items: QuoteItem[]) => {
       const ordered = resequence(items)
+      const quote = snapshotRef.current.quotes.find((q) => q.id === quoteId)
+      if (quote && quote.status !== 'draft') throw new Error('Sent and accepted quotes use revisions; the accepted version cannot be overwritten.')
       await repo().replaceQuoteItems(quoteId, ordered)
 
       // Totals are recomputed here, from the items, every single time. There
