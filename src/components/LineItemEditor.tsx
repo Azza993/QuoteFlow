@@ -141,11 +141,10 @@ export function LineItemEditor({
 
           <div className="space-y-1.5">
             <Label htmlFor={`price-${item.id}`}>Price each</Label>
-            <Input
+            <MoneyInput
               id={`price-${item.id}`}
-              inputMode="decimal"
-              value={centsToInput(item.selling_price)}
-              onChange={(event) => setSellingPrice(event.target.value)}
+              value={item.selling_price}
+              onChange={setSellingPrice}
               placeholder="0.00"
             />
           </div>
@@ -185,11 +184,10 @@ export function LineItemEditor({
           <div className="grid grid-cols-2 gap-3 rounded-xl border border-dashed border-ink-200 p-3.5">
             <div className="space-y-1.5">
               <Label htmlFor={`cost-${item.id}`}>Your cost (optional)</Label>
-              <Input
+              <MoneyInput
                 id={`cost-${item.id}`}
-                inputMode="decimal"
-                value={centsToInput(item.cost)}
-                onChange={(event) => setCost(event.target.value)}
+                value={item.cost}
+                onChange={setCost}
                 placeholder="—"
               />
             </div>
@@ -280,6 +278,55 @@ function QuantityInput({
       onBlur={handleBlur}
       onChange={(event) => handleChange(event.target.value)}
       aria-label="Quantity"
+    />
+  )
+}
+
+function MoneyInput({
+  value,
+  onChange,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
+  value: number | null
+  onChange: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(() => centsToInput(value))
+
+  const handleChange = (raw: string) => {
+    // Keep a local string while editing. Updating the parent on every keystroke
+    // is fine, but the rendered value must not come back from centsToInput(),
+    // otherwise iOS loses the caret and repeated taps can appear to increment
+    // the same digit instead of inserting a new one.
+    const cleaned = raw.replace(/[^0-9.]/g, '')
+    const [whole, ...decimalParts] = cleaned.split('.')
+    const normalisedWhole = whole.replace(/^0+(?=\d)/, '') || (cleaned.includes('.') ? '0' : '')
+    const normalised = decimalParts.length > 0
+      ? `${normalisedWhole}.${decimalParts.join('')}`
+      : normalisedWhole
+
+    setDraft(normalised)
+    onChange(normalised)
+  }
+
+  const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
+    if (draft === '0.00' || draft === '') event.currentTarget.select()
+  }
+
+  const handleBlur = () => {
+    const cents = inputToCents(draft)
+    setDraft(centsToInput(cents ?? 0))
+    onChange(draft)
+  }
+
+  return (
+    <Input
+      {...props}
+      type="text"
+      inputMode="decimal"
+      value={draft}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      onChange={(event) => handleChange(event.target.value)}
     />
   )
 }
