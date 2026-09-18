@@ -17,9 +17,9 @@ import type { Repository, Snapshot } from './repository'
 import {
   cancelPendingFollowUps, computeStats, createDraftQuote,
   duplicateQuote as buildDuplicate, expireQuote, findLapsedQuotes,
-  resequence, sendQuote, withRecalculatedTotals, buildFollowUpSchedule, type QuoteStats,
+  resequence, sendQuote, withRecalculatedTotals, type QuoteStats,
 } from './actions'
-import { nowIso } from '@/lib/dates'
+import { nowIso } from '@/lib/dates'\nimport { buildFollowUpSchedule } from '@/lib/follow-ups'
 import { newId } from '@/lib/utils'
 
 const EMPTY: Snapshot = {
