@@ -19,7 +19,7 @@ import type {
   NoteScan,
   PriceBookItem,
   Quote,
-  QuoteItem,
+  QuoteItem, QuoteRevision, QuoteRevisionItem,
 } from '@/types/domain'
 
 export interface Snapshot {
@@ -31,6 +31,8 @@ export interface Snapshot {
   followUps: FollowUp[]
   jobs: Job[]
   noteScans: NoteScan[]
+  revisions: QuoteRevision[]
+  revisionItems: QuoteRevisionItem[]
 }
 
 /** What a customer sees behind a public quote link. */
@@ -55,6 +57,8 @@ export interface Repository {
   deleteQuote(id: string): Promise<void>
   /** Items are always written as a complete, ordered set for one quote. */
   replaceQuoteItems(quoteId: string, items: QuoteItem[]): Promise<QuoteItem[]>
+  createQuoteRevision(quote: Quote, items: QuoteItem[]): Promise<{ revision: QuoteRevision; items: QuoteRevisionItem[] }>
+  sendQuoteRevision(revisionId: string): Promise<QuoteRevision>
 
   upsertPriceBookItem(item: PriceBookItem): Promise<PriceBookItem>
   deletePriceBookItem(id: string): Promise<void>
@@ -65,17 +69,23 @@ export interface Repository {
   upsertJob(job: Job): Promise<Job>
 
   upsertNoteScan(scan: NoteScan): Promise<NoteScan>
+  /** Persist a note photo and return its durable storage path/data URI. */
+  storeNoteImage(scanId: string, file: File): Promise<string>
 
   /** Public, token-addressed read used by the customer-facing quote view. */
   loadPublicQuote(token: string): Promise<PublicQuoteView | null>
   /** The only write a customer can make: accept or decline. */
+  decideQuote(quoteId: string, decision: 'accepted' | 'declined'): Promise<{ quote: Quote; job: Job | null; alreadyDecided?: boolean }>
   decidePublicQuote(token: string, decision: 'accepted' | 'declined'): Promise<void>
 
   /** Restore the seeded demo data. Only meaningful for the demo backend. */
   resetDemoData?(): Promise<Snapshot>
 }
 
-/** Public link token for a quote — opaque, not derived from the quote id. */
+/**
+ * Demo-only fallback token. Real Supabase quotes carry a database-generated
+ * opaque `public_token`; callers should prefer that value whenever present.
+ */
 export function publicTokenFor(quoteId: string): string {
   return quoteId.replace(/-/g, '').slice(0, 24)
 }

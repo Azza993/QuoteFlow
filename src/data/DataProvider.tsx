@@ -10,19 +10,21 @@ import {
   createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react'
 import type {
-  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem,
+  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem, QuoteRevision,
 } from '@/types/domain'
 import { createRepository } from '.'
 import type { Repository, Snapshot } from './repository'
 import {
-  acceptQuote, cancelPendingFollowUps, computeStats, createDraftQuote,
-  declineQuote, duplicateQuote as buildDuplicate, expireQuote, findLapsedQuotes,
+  cancelPendingFollowUps, computeStats, createDraftQuote,
+  duplicateQuote as buildDuplicate, expireQuote, findLapsedQuotes,
   resequence, sendQuote, withRecalculatedTotals, type QuoteStats,
 } from './actions'
 import { nowIso } from '@/lib/dates'
+import { buildFollowUpSchedule } from '@/lib/follow-ups'
 import { newId } from '@/lib/utils'
 
 const EMPTY: Snapshot = {
+  revisions: [], revisionItems: [],
   business: {
     id: '', business_name: '', logo_url: null, gst_inclusive: false, gst_rate: 0.15,
     tax_label: 'GST', currency_code: 'NZD', default_terms: '', default_validity_days: 30,
@@ -59,6 +61,7 @@ export interface DataContextValue extends Snapshot {
 
   createQuote: (overrides?: Partial<Quote>) => Promise<Quote>
   saveQuote: (quote: Quote) => Promise<Quote>
+  saveQuoteRevision: (quote: Quote, items: QuoteItem[]) => Promise<QuoteRevision>
   saveQuoteItems: (quoteId: string, items: QuoteItem[]) => Promise<void>
   removeQuote: (id: string) => Promise<void>
   duplicateQuote: (quoteId: string) => Promise<Quote>
@@ -306,6 +309,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const saveQuote = useCallback(
     async (quote: Quote) => {
+      const current = snapshotRef.current.quotes.find((q) => q.id === quote.id)
+      if (current && current.status !== 'draft') {
+        throw new Error('This quote has already been sent. Save changes as a revision instead.')
+      }
       const saved = await repo().upsertQuote(quote)
       commit((s) => ({
         ...s,
@@ -314,6 +321,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
           : [saved, ...s.quotes],
       }))
       return saved
+    },
+    [repo, commit],
+  )
+
+  const saveQuoteRevision = useCallback(
+    async (quote: Quote, items: QuoteItem[]) => {
+      if (quote.status === 'draft') throw new Error('Draft quotes should be saved normally.')
+      const totals = withRecalculatedTotals(quote, items)
+      const result = await repo().createQuoteRevision(totals, items)
+      commit((s) => ({
+        ...s,
+        revisions: [...s.revisions.filter((r) => r.id !== result.revision.id), result.revision],
+        revisionItems: [...s.revisionItems.filter((i) => i.revision_id !== result.revision.id), ...result.items],
+      }))
+      return result.revision
     },
     [repo, commit],
   )
@@ -329,11 +351,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const saveQuoteItems = useCallback(
     async (quoteId: string, items: QuoteItem[]) => {
       const ordered = resequence(items)
+      const quote = snapshotRef.current.quotes.find((q) => q.id === quoteId)
+      if (quote && quote.status !== 'draft') throw new Error('Sent and accepted quotes use revisions; the accepted version cannot be overwritten.')
       await repo().replaceQuoteItems(quoteId, ordered)
 
       // Totals are recomputed here, from the items, every single time. There
       // is no path in the app that writes a total from anywhere else.
-      const quote = snapshotRef.current.quotes.find((q) => q.id === quoteId)
       const updated = quote ? withRecalculatedTotals(quote, ordered) : undefined
       if (updated) await repo().upsertQuote(updated)
 
@@ -393,6 +416,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!quote) return
 
       const live = snapshotRef.current
+      if (quote.status !== 'draft') {
+        const pendingRevision = live.revisions
+          .filter((r) => r.quote_id === quoteId && r.status === 'draft')
+          .sort((a, b) => b.revision_number - a.revision_number)[0]
+        if (!pendingRevision) throw new Error('Save the revised quote before sending it.')
+        const sentRevision = await repo().sendQuoteRevision(pendingRevision.id)
+        const revisionQuote: Quote = {
+          ...quote,
+          customer_id: sentRevision.customer_id,
+          site_address: sentRevision.site_address,
+          scope_summary: sentRevision.scope_summary,
+          gst_inclusive: sentRevision.gst_inclusive,
+          gst_rate: sentRevision.gst_rate,
+          subtotal: sentRevision.subtotal,
+          gst_amount: sentRevision.gst_amount,
+          total: sentRevision.total,
+          valid_until: sentRevision.valid_until,
+          terms: sentRevision.terms,
+          sent_at: sentRevision.sent_at,
+        }
+        const customerName = live.customers.find((c) => c.id === sentRevision.customer_id)?.name ?? ''
+        const followUps = buildFollowUpSchedule(revisionQuote, customerName)
+        await repo().replaceFollowUps(quoteId, followUps)
+        commit((s) => ({
+          ...s,
+          revisions: s.revisions.map((r) => r.id === sentRevision.id ? sentRevision : r),
+          followUps: [...s.followUps.filter((f) => f.quote_id !== quoteId), ...followUps],
+        }))
+        return
+      }
       const customerName = live.customers.find((c) => c.id === quote.customer_id)?.name ?? ''
       const { quote: sent, followUps } = sendQuote(
         quote, customerName, live.business.default_validity_days,
@@ -412,30 +465,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const settleQuote = useCallback(
     async (quoteId: string, decision: 'accepted' | 'declined') => {
-      const quote = snapshotRef.current.quotes.find((q) => q.id === quoteId)
-      if (!quote) return
-
-      let updated: Quote
-      let job: Job | null = null
-      if (decision === 'accepted') {
-        const result = acceptQuote(quote)
-        updated = result.quote
-        job = result.job
-        await repo().upsertJob(job)
-      } else {
-        updated = declineQuote(quote)
-      }
-      await repo().upsertQuote(updated)
-
+      const result = await repo().decideQuote(quoteId, decision)
       const cancelled = cancelPendingFollowUps(
         snapshotRef.current.followUps.filter((f) => f.quote_id === quoteId),
       )
       await Promise.all(cancelled.map((f) => repo().upsertFollowUp(f)))
-
       commit((s) => ({
         ...s,
-        quotes: s.quotes.map((q) => (q.id === quoteId ? updated : q)),
-        jobs: job ? [job, ...s.jobs] : s.jobs,
+        quotes: s.quotes.map((q) => (q.id === quoteId ? result.quote : q)),
+        jobs: result.job
+          ? [result.job, ...s.jobs.filter((j) => j.id !== result.job!.id)]
+          : s.jobs,
         followUps: s.followUps.map((f) => cancelled.find((c) => c.id === f.id) ?? f),
       }))
     },
@@ -555,7 +595,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       quoteById, itemsForQuote, customerById, customerForQuote, followUpsForQuote,
       scanForQuote, jobForQuote, dueFollowUps, stats,
       saveBusiness, saveCustomer, createCustomer, removeCustomer,
-      createQuote, saveQuote, saveQuoteItems, removeQuote, duplicateQuote,
+      createQuote, saveQuote, saveQuoteRevision, saveQuoteItems, removeQuote, duplicateQuote,
       markSent, markAccepted, markDeclined, reopenQuote,
       saveFollowUp, completeFollowUp, skipFollowUp, scheduleFollowUp,
       savePriceBookItem, removePriceBookItem, saveNoteScan,
@@ -565,7 +605,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       snapshot, loading, error, repository, quoteById, itemsForQuote, customerById,
       customerForQuote, followUpsForQuote, scanForQuote, jobForQuote, dueFollowUps, stats,
       saveBusiness, saveCustomer, createCustomer, removeCustomer, createQuote, saveQuote,
-      saveQuoteItems, removeQuote, duplicateQuote, markSent, markAccepted, markDeclined,
+      saveQuoteRevision, saveQuoteItems, removeQuote, duplicateQuote, markSent, markAccepted, markDeclined,
       reopenQuote, saveFollowUp, completeFollowUp, skipFollowUp, scheduleFollowUp,
       savePriceBookItem, removePriceBookItem, saveNoteScan, refresh, resetDemoData,
     ],

@@ -1,0 +1,348 @@
+-- QuoteFlow production hardening.
+--
+-- These constraints/policies move important integrity guarantees below the
+-- browser. The frontend still enforces the same rules for UX, but a client
+-- must not be able to bypass them by calling Supabase directly.
+
+-- An accepted quote creates one job. Prevent duplicate jobs for the same quote.
+create unique index if not exists jobs_quote_id_unique_idx on jobs (quote_id);
+
+-- A quote's customer must belong to the same business as the quote.
+create unique index if not exists customers_id_business_unique_idx on customers (id, business_id);
+
+alter table quotes drop constraint if exists quotes_customer_id_fkey;
+alter table quotes
+  add constraint quotes_customer_business_fkey
+  foreign key (customer_id, business_id)
+  references customers (id, business_id)
+  on delete set null;
+
+alter table jobs drop constraint if exists jobs_customer_id_fkey;
+alter table jobs
+  add constraint jobs_customer_business_fkey
+  foreign key (customer_id, business_id)
+  references customers (id, business_id)
+  on delete set null;
+
+-- Accepted quotes are historical records. Deleting one must never silently
+-- remove the job created from it.
+create or replace function prevent_accepted_quote_delete()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.status = 'accepted' then
+    raise exception 'accepted quotes cannot be deleted; archive the quote instead';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists quotes_prevent_accepted_delete on quotes;
+create trigger quotes_prevent_accepted_delete
+before delete on quotes
+for each row execute function prevent_accepted_quote_delete();
+
+-- Tighten child-table ownership checks. The previous policies only checked
+-- whether a quote id existed; these policies explicitly require that quote to
+-- belong to a business owned by the current authenticated user.
+drop policy if exists quote_items_owner_all on quote_items;
+create policy quote_items_owner_all on quote_items
+  for all
+  using (
+    exists (
+      select 1
+      from quotes q
+      where q.id = quote_items.quote_id
+        and q.business_id in (select owned_business_ids())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from quotes q
+      where q.id = quote_items.quote_id
+        and q.business_id in (select owned_business_ids())
+    )
+  );
+
+drop policy if exists follow_ups_owner_all on follow_ups;
+create policy follow_ups_owner_all on follow_ups
+  for all
+  using (
+    exists (
+      select 1
+      from quotes q
+      where q.id = follow_ups.quote_id
+        and q.business_id in (select owned_business_ids())
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from quotes q
+      where q.id = follow_ups.quote_id
+        and q.business_id in (select owned_business_ids())
+    )
+  );
+
+drop policy if exists note_scans_owner_all on note_scans;
+create policy note_scans_owner_all on note_scans
+  for all
+  using (
+    quote_id is not null
+    and exists (
+      select 1
+      from quotes q
+      where q.id = note_scans.quote_id
+        and q.business_id in (select owned_business_ids())
+    )
+  )
+  with check (
+    quote_id is not null
+    and exists (
+      select 1
+      from quotes q
+      where q.id = note_scans.quote_id
+        and q.business_id in (select owned_business_ids())
+    )
+  );
+
+-- Public customers only need their name for the quote document. Do not expose
+-- the contractor's private customer email/phone/address through the anonymous
+-- RPC.
+create or replace function public_quote(token text)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'quote', to_jsonb(q) - 'public_token',
+    'items', coalesce((
+      select jsonb_agg(to_jsonb(i) order by i.sort_order)
+      from quote_items i where i.quote_id = q.id
+    ), '[]'::jsonb),
+    'customer', case when c.id is null then null else jsonb_build_object(
+      'id', c.id,
+      'business_id', c.business_id,
+      'name', c.name,
+      'phone', null,
+      'email', null,
+      'address', null,
+      'notes', null,
+      'created_at', c.created_at
+    ) end,
+    'business', to_jsonb(b) - 'owner_id'
+  )
+  from quotes q
+  join business_profile b on b.id = q.business_id
+  left join customers c on c.id = q.customer_id
+  where q.public_token = token
+    and q.status in ('sent', 'accepted', 'declined', 'expired');
+$$;
+
+grant execute on function public_quote(text) to anon, authenticated;
+
+-- ------------------------------------------------------------ note storage
+-- Scan photos are private business data. Store them outside the database in a
+-- private bucket and keep only durable object paths in note_scans.image_urls.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'note-scans',
+  'note-scans',
+  false,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+-- Object paths are `<business_id>/<scan_id>/<random-file>`. The first folder
+-- is the business id, so storage access can be tied to the same ownership
+-- function used by the relational tables.
+drop policy if exists note_scan_objects_owner_insert on storage.objects;
+create policy note_scan_objects_owner_insert on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'note-scans'
+    and (storage.foldername(name))[1] in (select id::text from business_profile where id in (select owned_business_ids()))
+  );
+
+drop policy if exists note_scan_objects_owner_select on storage.objects;
+create policy note_scan_objects_owner_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'note-scans'
+    and (storage.foldername(name))[1] in (select id::text from business_profile where id in (select owned_business_ids()))
+  );
+
+drop policy if exists note_scan_objects_owner_delete on storage.objects;
+create policy note_scan_objects_owner_delete on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'note-scans'
+    and (storage.foldername(name))[1] in (select id::text from business_profile where id in (select owned_business_ids()))
+  );
+
+-- --------------------------------------------------------------- auth setup
+-- Create a private business workspace automatically when a user signs up.
+-- This keeps the first authenticated session usable without a privileged
+-- service key in the browser. The business name comes from sign-up metadata.
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.business_profile (owner_id, business_name)
+  values (
+    new.id,
+    coalesce(nullif(trim(new.raw_user_meta_data ->> 'business_name'), ''), 'My Business')
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_quoteflow on auth.users;
+create trigger on_auth_user_created_quoteflow
+after insert on auth.users
+for each row execute function public.handle_new_auth_user();
+
+-- --------------------------------------------------------- quote numbering
+-- Quote numbers are business-scoped and year-scoped. The browser may still
+-- calculate a provisional number for immediate UX, but this trigger is the
+-- final authority, so two simultaneous quote creations cannot collide.
+create table if not exists public.quote_number_counters (
+  business_id uuid not null references public.business_profile (id) on delete cascade,
+  year integer not null,
+  next_number bigint not null check (next_number > 0),
+  primary key (business_id, year)
+);
+
+revoke all on table public.quote_number_counters from anon, authenticated;
+
+create or replace function public.allocate_quote_number(p_business_id uuid)
+returns text
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  current_year integer := extract(year from current_date)::integer;
+  allocated bigint;
+begin
+  insert into public.quote_number_counters (business_id, year, next_number)
+  select
+    p_business_id,
+    current_year,
+    coalesce(max(substring(q.quote_number from '^Q-[0-9]{4}-(\d+)$')::bigint), 0) + 1
+  from public.quotes q
+  where q.business_id = p_business_id
+    and q.quote_number ~ ('^Q-' || current_year::text || '-[0-9]+$')
+  on conflict (business_id, year) do nothing;
+
+  update public.quote_number_counters
+  set next_number = next_number + 1
+  where business_id = p_business_id
+    and year = current_year
+  returning next_number - 1 into allocated;
+
+  if allocated is null then
+    raise exception 'could not allocate quote number';
+  end if;
+
+  return format('Q-%s-%s', current_year, lpad(allocated::text, 4, '0'));
+end;
+$$;
+
+create or replace function public.assign_quote_number()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.quote_number := public.allocate_quote_number(new.business_id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists quotes_assign_number on public.quotes;
+create trigger quotes_assign_number
+before insert on public.quotes
+for each row execute function public.assign_quote_number();
+
+-- ----------------------------------------------------- atomic item updates
+-- Replacing all line items is a single database transaction. Totals are
+-- updated in the same transaction so a failed insert cannot leave a quote
+-- with empty items or stale totals.
+create or replace function public.replace_quote_items(
+  p_quote_id uuid,
+  p_items jsonb,
+  p_subtotal bigint,
+  p_gst_amount bigint,
+  p_total bigint
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  quote_business_id uuid;
+begin
+  select business_id into quote_business_id
+  from public.quotes
+  where id = p_quote_id;
+
+  if quote_business_id is null then
+    raise exception 'quote not found';
+  end if;
+
+  delete from public.quote_items where quote_id = p_quote_id;
+
+  insert into public.quote_items (
+    id, quote_id, description, quantity, unit, cost, markup,
+    selling_price, type, notes, sort_order
+  )
+  select
+    x.id,
+    p_quote_id,
+    x.description,
+    x.quantity,
+    x.unit,
+    x.cost,
+    x.markup,
+    x.selling_price,
+    x.type::line_item_type,
+    x.notes,
+    x.sort_order
+  from jsonb_to_recordset(coalesce(p_items, '[]'::jsonb)) as x(
+    id uuid,
+    description text,
+    quantity numeric(12,3),
+    unit text,
+    cost bigint,
+    markup numeric(8,2),
+    selling_price bigint,
+    type text,
+    notes text,
+    sort_order integer
+  );
+
+  update public.quotes
+  set subtotal = p_subtotal,
+      gst_amount = p_gst_amount,
+      total = p_total
+  where id = p_quote_id;
+
+  return coalesce(
+    (select jsonb_agg(to_jsonb(i) order by i.sort_order)
+     from public.quote_items i
+     where i.quote_id = p_quote_id),
+    '[]'::jsonb
+  );
+end;
+$$;
+
+grant execute on function public.replace_quote_items(uuid, jsonb, bigint, bigint, bigint) to authenticated;

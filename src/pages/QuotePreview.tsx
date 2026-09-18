@@ -19,16 +19,27 @@ import { formatDate } from '@/lib/dates'
 export function QuotePreview() {
   const { quoteId = '' } = useParams()
   const navigate = useNavigate()
-  const { quoteById, itemsForQuote, customerForQuote, business, markSent } = useData()
+  const { quoteById, itemsForQuote, customerForQuote, business, markSent, revisions, revisionItems } = useData()
 
   const quote = quoteById(quoteId)
   const [sendOpen, setSendOpen] = useState(false)
 
   if (!quote) return <NotFound />
 
-  const items = itemsForQuote(quote.id)
-  const customer = customerForQuote(quote) ?? null
-  const publicUrl = `${window.location.origin}/q/${publicTokenFor(quote.id)}`
+  const latestRevision = revisions
+    .filter((r) => r.quote_id === quote.id)
+    .sort((a, b) => b.revision_number - a.revision_number)[0]
+  const displayQuote = latestRevision ? { ...quote, ...latestRevision, id: quote.id, quote_number: quote.quote_number } : quote
+  const items = latestRevision
+    ? revisionItems.filter((i) => i.revision_id === latestRevision.id).sort((a, b) => a.sort_order - b.sort_order).map((i) => ({ ...i, quote_id: quote.id }))
+    : itemsForQuote(quote.id)
+  const customer = customerForQuote(displayQuote) ?? null
+  // Supabase generates an opaque token that must be used verbatim. The
+  // deterministic helper remains only as a demo-backend fallback.
+  const token = latestRevision?.status !== 'draft' && latestRevision?.public_token
+    ? latestRevision.public_token
+    : quote.public_token ?? publicTokenFor(quote.id)
+  const publicUrl = `${window.location.origin}/q/${token}`
 
   const emailBody = buildEmailBody()
 
@@ -56,7 +67,7 @@ export function QuotePreview() {
     <div>
       <PageHeader
         title="Preview"
-        subtitle="Exactly what your customer will see."
+        subtitle={latestRevision?.status === 'draft' ? 'Pending revision — not yet sent to the customer.' : 'Exactly what your customer will see.'}
         back={{ to: `/quotes/${quote.id}`, label: 'Quote' }}
         actions={
           <div className="hidden gap-2 sm:flex">
@@ -66,9 +77,9 @@ export function QuotePreview() {
             <Button variant="secondary" onClick={() => window.print()}>
               <Printer /> Print / PDF
             </Button>
-            {quote.status === 'draft' ? (
+            {quote.status === 'draft' || latestRevision?.status === 'draft' ? (
               <Button onClick={() => setSendOpen(true)}>
-                <Send /> Send
+                <Send /> {quote.status === 'draft' ? 'Send' : 'Send revised quote'}
               </Button>
             ) : null}
           </div>
@@ -92,7 +103,7 @@ export function QuotePreview() {
         </Button>
         {quote.status === 'draft' ? (
           <Button className="w-full" size="lg" onClick={() => setSendOpen(true)}>
-            <Send /> Send to customer
+            <Send /> {quote.status === 'draft' ? 'Send to customer' : 'Send revised quote'}
           </Button>
         ) : null}
       </div>
@@ -100,7 +111,7 @@ export function QuotePreview() {
       <Dialog open={sendOpen} onOpenChange={setSendOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Send this quote</DialogTitle>
+            <DialogTitle>{quote.status === 'draft' ? 'Send this quote' : 'Send revised quote'}</DialogTitle>
             <DialogDescription>
               Copy the message and link into your email or messages app, then mark it as sent —
               that's what starts the follow-up reminders.
@@ -157,7 +168,7 @@ export function QuotePreview() {
               Not yet
             </Button>
             <Button onClick={send}>
-              <Send /> Mark as sent
+              <Send /> {quote.status === 'draft' ? 'Mark as sent' : 'I’ve sent the revised quote'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -172,20 +183,9 @@ export function QuotePreview() {
       ? `\n\nThe quote is valid until ${formatDate(quote!.valid_until)}.`
       : ''
 
-    return `Hi ${firstName},
-
-Thanks for having me out. Here's quote ${quote!.quote_number} — ${formatMoney(
+    return `Hi ${firstName},\n\nThanks for having me out. Here's quote ${quote!.quote_number} — ${formatMoney(
       quote!.total,
       business.currency_code || 'NZD',
-    )} including ${business.tax_label}.${scope}
-
-You can view it and accept or decline here:
-${publicUrl}${validity}
-
-Any questions, just give me a call.
-
-Cheers,
-${business.business_name}
-${business.contact_phone ?? ''}`
+    )} including ${business.tax_label}.${scope}\n\nYou can view it and accept or decline here:\n${publicUrl}${validity}\n\nAny questions, just give me a call.\n\nCheers,\n${business.business_name}\n${business.contact_phone ?? ''}`
   }
 }

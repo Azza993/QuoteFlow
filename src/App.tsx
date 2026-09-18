@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { useEffect } from 'react'
+import { AuthProvider } from './auth/AuthProvider'
+import { useAuth } from './hooks/use-auth'
 import { DataProvider } from './data/DataProvider'
 import { TooltipProvider } from './components/ui/tooltip'
 import { AppShell } from './components/AppShell'
@@ -18,6 +20,7 @@ import { PriceBook } from './pages/PriceBook'
 import { Customers } from './pages/Customers'
 import { Settings } from './pages/Settings'
 import { PublicQuote } from './pages/PublicQuote'
+import { Auth } from './pages/Auth'
 import { NotFound } from './pages/NotFound'
 
 function ScrollToTop() {
@@ -28,8 +31,26 @@ function ScrollToTop() {
   return null
 }
 
-/** Everything behind the contractor-facing shell. */
+/** Contractor routes require an authenticated Supabase session when the real backend is enabled. */
 function ContractorRoutes() {
+  const { loading: authLoading, session, configured } = useAuth()
+
+  if (configured && authLoading) {
+    return <LoadingState label="Checking your account…" />
+  }
+
+  if (configured && !session) {
+    return <Navigate to="/auth" replace />
+  }
+
+  return (
+    <DataProvider>
+      <ContractorDataRoutes />
+    </DataProvider>
+  )
+}
+
+function ContractorDataRoutes() {
   const { loading, error } = useData()
 
   if (loading) {
@@ -72,21 +93,28 @@ function ContractorRoutes() {
   )
 }
 
+function AuthRoute() {
+  const { configured, session, loading } = useAuth()
+  if (configured && loading) return <LoadingState label="Checking your account…" />
+  if (configured && session) return <Navigate to="/" replace />
+  return <Auth />
+}
+
 export function App() {
   return (
     <BrowserRouter>
-      <DataProvider>
+      <AuthProvider>
         <TooltipProvider delayDuration={200}>
           <ScrollToTop />
           <Routes>
-            {/* The customer-facing view is deliberately outside the app shell:
-                no nav, no contractor tools, just the quote. */}
+            {/* Customer links stay public and do not instantiate contractor auth/data. */}
             <Route path="/q/:token" element={<PublicQuote />} />
+            <Route path="/auth" element={<AuthRoute />} />
             <Route path="*" element={<ContractorRoutes />} />
           </Routes>
           <Toaster position="top-center" richColors closeButton />
         </TooltipProvider>
-      </DataProvider>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

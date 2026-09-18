@@ -9,8 +9,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PublicQuoteView, Repository, Snapshot } from '../repository'
 import type {
-  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem,
+  BusinessProfile, Customer, FollowUp, Job, NoteScan, PriceBookItem, Quote, QuoteItem, QuoteRevision, QuoteRevisionItem,
 } from '@/types/domain'
+import { calculateTotals } from '@/lib/money'
 import { getSupabase } from './client'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -29,6 +30,12 @@ const nullableNum = (value: unknown): number | null =>
 /* Row mappers — the database returns numerics as strings. */
 const toQuote = (row: Record<string, unknown>): Quote =>
   ({ ...row, gst_rate: num(row.gst_rate), subtotal: num(row.subtotal), gst_amount: num(row.gst_amount), total: num(row.total) }) as Quote
+
+const toRevision = (row: Record<string, unknown>): QuoteRevision =>
+  ({ ...row, gst_rate: num(row.gst_rate), subtotal: num(row.subtotal), gst_amount: num(row.gst_amount), total: num(row.total) }) as QuoteRevision
+
+const toRevisionItem = (row: Record<string, unknown>): QuoteRevisionItem =>
+  ({ ...row, quantity: num(row.quantity, 1), cost: nullableNum(row.cost), markup: nullableNum(row.markup), selling_price: num(row.selling_price) }) as QuoteRevisionItem
 
 const toQuoteItem = (row: Record<string, unknown>): QuoteItem =>
   ({ ...row, quantity: num(row.quantity, 1), cost: nullableNum(row.cost), markup: nullableNum(row.markup), selling_price: num(row.selling_price) }) as QuoteItem
@@ -58,7 +65,7 @@ export class SupabaseRepository implements Repository {
     }
     const business = toBusiness(businessRow)
 
-    const [customers, quotes, quoteItems, priceBook, followUps, jobs, noteScans] = await Promise.all([
+    const [customers, quotes, quoteItems, priceBook, followUps, jobs, noteScans, revisions, revisionItems] = await Promise.all([
       this.db.from('customers').select('*').eq('business_id', business.id).order('name'),
       this.db.from('quotes').select('*').eq('business_id', business.id).order('created_at', { ascending: false }),
       this.db.from('quote_items').select('*').order('sort_order'),
@@ -66,6 +73,8 @@ export class SupabaseRepository implements Repository {
       this.db.from('follow_ups').select('*').order('scheduled_for'),
       this.db.from('jobs').select('*').eq('business_id', business.id).order('created_at', { ascending: false }),
       this.db.from('note_scans').select('*').order('created_at', { ascending: false }),
+      this.db.from('quote_revisions').select('*').eq('business_id', business.id).order('revision_number', { ascending: false }),
+      this.db.from('quote_revision_items').select('*').order('sort_order'),
     ])
 
     return {
@@ -77,6 +86,8 @@ export class SupabaseRepository implements Repository {
       followUps: unwrap(followUps) as FollowUp[],
       jobs: unwrap(jobs) as Job[],
       noteScans: unwrap(noteScans) as NoteScan[],
+      revisions: (unwrap(revisions) as Record<string, unknown>[]).map(toRevision),
+      revisionItems: (unwrap(revisionItems) as Record<string, unknown>[]).map(toRevisionItem),
     }
   }
 
@@ -102,9 +113,41 @@ export class SupabaseRepository implements Repository {
   }
 
   async replaceQuoteItems(quoteId: string, items: QuoteItem[]): Promise<QuoteItem[]> {
-    unwrap(await this.db.from('quote_items').delete().eq('quote_id', quoteId).select())
-    if (items.length === 0) return []
-    return (unwrap(await this.db.from('quote_items').insert(items).select()) as Record<string, unknown>[]).map(toQuoteItem)
+    const quoteRow = unwrap(
+      await this.db.from('quotes').select('gst_inclusive,gst_rate').eq('id', quoteId).single(),
+    ) as Record<string, unknown>
+    const totals = calculateTotals(items, Boolean(quoteRow.gst_inclusive), num(quoteRow.gst_rate, 0.15))
+    const payload = items.map(({ id, description, quantity, unit, cost, markup, selling_price, type, notes, sort_order }) => ({
+      id, description, quantity, unit, cost, markup, selling_price, type, notes, sort_order,
+    }))
+
+    const result = unwrap(await this.db.rpc('replace_quote_items', {
+      p_quote_id: quoteId,
+      p_items: payload,
+      p_subtotal: totals.subtotal,
+      p_gst_amount: totals.gst_amount,
+      p_total: totals.total,
+    })) as Record<string, unknown>[]
+
+    return result.map(toQuoteItem)
+  }
+
+  async createQuoteRevision(quote: Quote, items: QuoteItem[]): Promise<{ revision: QuoteRevision; items: QuoteRevisionItem[] }> {
+    const result = unwrap(await this.db.rpc('create_quote_revision', {
+      p_quote_id: quote.id, p_customer_id: quote.customer_id, p_site_address: quote.site_address,
+      p_scope_summary: quote.scope_summary, p_gst_inclusive: quote.gst_inclusive, p_gst_rate: quote.gst_rate,
+      p_subtotal: quote.subtotal, p_gst_amount: quote.gst_amount, p_total: quote.total,
+      p_valid_until: quote.valid_until, p_terms: quote.terms, p_source: quote.source,
+      p_items: items.map(({ description, quantity, unit, cost, markup, selling_price, type, notes, sort_order }) =>
+        ({ description, quantity, unit, cost, markup, selling_price, type, notes, sort_order })),
+    })) as { revision: Record<string, unknown>; items: Record<string, unknown>[] }
+    return { revision: toRevision(result.revision), items: result.items.map(toRevisionItem) }
+  }
+
+  async sendQuoteRevision(revisionId: string): Promise<QuoteRevision> {
+    const result = unwrap(await this.db.rpc('send_quote_revision', { p_revision_id: revisionId })) as
+      { revision: Record<string, unknown> }
+    return toRevision(result.revision)
   }
 
   async upsertPriceBookItem(item: PriceBookItem): Promise<PriceBookItem> {
@@ -131,6 +174,33 @@ export class SupabaseRepository implements Repository {
 
   async upsertNoteScan(scan: NoteScan): Promise<NoteScan> {
     return unwrap(await this.db.from('note_scans').upsert(scan).select().single()) as NoteScan
+  }
+
+  async storeNoteImage(scanId: string, file: File): Promise<string> {
+    if (!file.type.startsWith('image/')) throw new Error('Only image files can be stored.')
+    if (file.size > 10 * 1024 * 1024) throw new Error('That photo is larger than the 10 MB limit.')
+
+    const business = unwrap(
+      await this.db.from('business_profile').select('id').limit(1).maybeSingle(),
+    ) as { id: string } | null
+    if (!business?.id) throw new Error('No business profile found.')
+
+    const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+    const path = `${business.id}/${scanId}/${crypto.randomUUID()}.${extension}`
+    const uploaded = await this.db.storage.from('note-scans').upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: false,
+    })
+    if (uploaded.error) throw new Error(uploaded.error.message)
+    return path
+  }
+
+  async decideQuote(quoteId: string, decision: 'accepted' | 'declined'): Promise<{ quote: Quote; job: Job | null; alreadyDecided?: boolean }> {
+    const result = unwrap(await this.db.rpc('decide_quote', { p_quote_id: quoteId, p_decision: decision })) as
+      { ok: boolean; quote: Record<string, unknown>; job: Record<string, unknown> | null; already_decided?: boolean }
+    if (!result.ok) throw new Error('Could not update the quote lifecycle.')
+    return { quote: toQuote(result.quote), job: result.job ? (result.job as unknown as Job) : null, alreadyDecided: result.already_decided }
   }
 
   async loadPublicQuote(token: string): Promise<PublicQuoteView | null> {

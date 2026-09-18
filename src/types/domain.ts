@@ -69,9 +69,49 @@ export interface Quote {
   valid_until: string | null
   terms: string | null
   source: QuoteSource
+  /** Database-generated opaque token used by the real customer-facing link. */
+  public_token?: string | null
   created_at: string
   sent_at: string | null
   decided_at: string | null
+}
+
+export interface QuoteRevision {
+  id: string
+  quote_id: string
+  business_id: string
+  revision_number: number
+  customer_id: string | null
+  site_address: string | null
+  scope_summary: string | null
+  gst_inclusive: boolean
+  gst_rate: number
+  subtotal: number
+  gst_amount: number
+  total: number
+  valid_until: string | null
+  terms: string | null
+  source: QuoteSource
+  public_token: string | null
+  status: QuoteStatus
+  created_by: string | null
+  created_at: string
+  sent_at: string | null
+  decided_at: string | null
+}
+
+export interface QuoteRevisionItem {
+  id: string
+  revision_id: string
+  description: string
+  quantity: number
+  unit: string
+  cost: number | null
+  markup: number | null
+  selling_price: number
+  type: LineItemType
+  notes: string | null
+  sort_order: number
 }
 
 export interface QuoteItem {
