@@ -77,9 +77,9 @@ export function QuotePreview() {
             <Button variant="secondary" onClick={() => window.print()}>
               <Printer /> Print / PDF
             </Button>
-            {quote.status === 'draft' ? (
+            {quote.status === 'draft' || latestRevision?.status === 'draft' ? (
               <Button onClick={() => setSendOpen(true)}>
-                <Send /> Send
+                <Send /> {quote.status === 'draft' ? 'Send' : 'Send revised quote'}
               </Button>
             ) : null}
           </div>
@@ -103,7 +103,7 @@ export function QuotePreview() {
         </Button>
         {quote.status === 'draft' ? (
           <Button className="w-full" size="lg" onClick={() => setSendOpen(true)}>
-            <Send /> Send to customer
+            <Send /> {quote.status === 'draft' ? 'Send to customer' : 'Send revised quote'}
           </Button>
         ) : null}
       </div>
@@ -111,7 +111,7 @@ export function QuotePreview() {
       <Dialog open={sendOpen} onOpenChange={setSendOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Send this quote</DialogTitle>
+            <DialogTitle>{quote.status === 'draft' ? 'Send this quote' : 'Send revised quote'}</DialogTitle>
             <DialogDescription>
               Copy the message and link into your email or messages app, then mark it as sent —
               that's what starts the follow-up reminders.
@@ -168,7 +168,7 @@ export function QuotePreview() {
               Not yet
             </Button>
             <Button onClick={send}>
-              <Send /> Mark as sent
+              <Send /> {quote.status === 'draft' ? 'Mark as sent' : 'I’ve sent the revised quote'}
             </Button>
           </DialogFooter>
         </DialogContent>
