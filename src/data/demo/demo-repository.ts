@@ -95,6 +95,17 @@ export class DemoRepository implements Repository {
     })
   }
 
+  sendQuote(quoteId: string): Promise<Quote> {
+    return this.commit((s) => {
+      const quote = s.quotes.find((q) => q.id === quoteId)
+      if (!quote) throw new Error('Quote not found.')
+      if (quote.status !== 'draft') throw new Error('Only draft quotes can be sent.')
+      const sent = { ...quote, status: 'sent' as const, sent_at: nowIso() }
+      s.quotes = s.quotes.map((q) => q.id === quoteId ? sent : q)
+      return sent
+    })
+  }
+
   deleteQuote(id: string): Promise<void> {
     return this.commit((s) => {
       const quote = s.quotes.find((q) => q.id === id)
