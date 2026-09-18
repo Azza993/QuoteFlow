@@ -117,14 +117,10 @@ export function LineItemEditor({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="space-y-1.5">
             <Label htmlFor={`qty-${item.id}`}>Qty</Label>
-            <Input
+            <QuantityInput
               id={`qty-${item.id}`}
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.25"
               value={item.quantity}
-              onChange={(event) => set('quantity', Number.parseFloat(event.target.value) || 0)}
+              onChange={(quantity) => set('quantity', quantity)}
             />
           </div>
 
@@ -225,6 +221,65 @@ export function LineItemEditor({
         ) : null}
       </div>
     </li>
+  )
+}
+
+function QuantityInput({
+  value,
+  onChange,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
+  value: number
+  onChange: (value: number) => void
+}) {
+  const [draft, setDraft] = useState(() => String(value))
+
+  const handleChange = (raw: string) => {
+    // Keep the text editable while typing, including decimals. Normalise
+    // leading zeroes so iOS cannot turn a starting 0 into values such as "020".
+    const cleaned = raw.replace(/[^0-9.]/g, '')
+    const [whole, ...decimalParts] = cleaned.split('.')
+    const normalisedWhole = whole.replace(/^0+(?=\d)/, '') || (cleaned.includes('.') ? '0' : '')
+    const normalised = decimalParts.length > 0
+      ? `${normalisedWhole}.${decimalParts.join('')}`
+      : normalisedWhole
+
+    setDraft(normalised)
+
+    if (normalised !== '' && normalised !== '.') {
+      const parsed = Number.parseFloat(normalised)
+      if (Number.isFinite(parsed) && parsed >= 0) onChange(parsed)
+    } else {
+      onChange(0)
+    }
+  }
+
+  const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
+    if (draft === '0') event.currentTarget.select()
+  }
+
+  const handleBlur = () => {
+    const parsed = Number.parseFloat(draft)
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setDraft(String(value))
+      return
+    }
+    setDraft(String(parsed))
+    onChange(parsed)
+  }
+
+  return (
+    <Input
+      {...props}
+      type="text"
+      inputMode="decimal"
+      min="0"
+      step="0.25"
+      value={draft}
+      onFocus={handleFocus}
+      onChange={(event) => handleChange(event.target.value)}
+      aria-label="Quantity"
+    />
   )
 }
 
