@@ -19,7 +19,7 @@ import type {
   NoteScan,
   PriceBookItem,
   Quote,
-  QuoteItem,
+  QuoteItem, QuoteRevision, QuoteRevisionItem,
 } from '@/types/domain'
 
 export interface Snapshot {
@@ -54,7 +54,7 @@ export interface Repository {
   upsertQuote(quote: Quote): Promise<Quote>
   deleteQuote(id: string): Promise<void>
   /** Items are always written as a complete, ordered set for one quote. */
-  replaceQuoteItems(quoteId: string, items: QuoteItem[]): Promise<QuoteItem[]>
+  replaceQuoteItems(quoteId: string, items: QuoteItem[]): Promise<QuoteItem[]>\n  createQuoteRevision(quote: Quote, items: QuoteItem[]): Promise<{ revision: QuoteRevision; items: QuoteRevisionItem[] }>\n  sendQuoteRevision(revisionId: string): Promise<QuoteRevision>
 
   upsertPriceBookItem(item: PriceBookItem): Promise<PriceBookItem>
   deletePriceBookItem(id: string): Promise<void>
