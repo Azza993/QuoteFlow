@@ -2,7 +2,7 @@ name: Deploy QuoteFlow to GitHub Pages
 
 on:
   push:
-    branches: [fix/production-hardening]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
