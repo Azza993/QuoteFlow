@@ -15,7 +15,7 @@ import type {
 import { createRepository } from '.'
 import type { Repository, Snapshot } from './repository'
 import {
-  acceptQuote, cancelPendingFollowUps, computeStats, createDraftQuote,
+  cancelPendingFollowUps, computeStats, createDraftQuote,
   declineQuote, duplicateQuote as buildDuplicate, expireQuote, findLapsedQuotes,
   resequence, sendQuote, withRecalculatedTotals, buildFollowUpSchedule, type QuoteStats,
 } from './actions'
@@ -307,13 +307,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const saveQuote = useCallback(
     async (quote: Quote) => {
       const current = snapshotRef.current.quotes.find((q) => q.id === quote.id)
-      if (current && current.status !== 'draft' && (
-        quote.customer_id !== current.customer_id ||
-        quote.site_address !== current.site_address ||
-        quote.scope_summary !== current.scope_summary ||
-        quote.terms !== current.terms ||
-        quote.total !== current.total
-      )) throw new Error('This quote has already been sent. Save changes as a revision instead.')
+      if (current && current.status !== 'draft') {
+        throw new Error('This quote has already been sent. Save changes as a revision instead.')
+      }
       const saved = await repo().upsertQuote(quote)
       commit((s) => ({
         ...s,
