@@ -19,18 +19,18 @@ import { formatDate } from '@/lib/dates'
 export function QuotePreview() {
   const { quoteId = '' } = useParams()
   const navigate = useNavigate()
-  const { quoteById, itemsForQuote, customerForQuote, business, markSent } = useData()
+  const { quoteById, itemsForQuote, customerForQuote, business, markSent, revisions, revisionItems } = useData()
 
   const quote = quoteById(quoteId)
   const [sendOpen, setSendOpen] = useState(false)
 
   if (!quote) return <NotFound />
 
-  const items = itemsForQuote(quote.id)
-  const customer = customerForQuote(quote) ?? null
+  const latestRevision = revisions\n    .filter((r) => r.quote_id === quote.id)\n    .sort((a, b) => b.revision_number - a.revision_number)[0]\n  const displayQuote = latestRevision ? { ...quote, ...latestRevision, id: quote.id, quote_number: quote.quote_number } : quote\n  const items = latestRevision\n    ? revisionItems.filter((i) => i.revision_id === latestRevision.id).sort((a, b) => a.sort_order - b.sort_order).map((i) => ({ ...i, quote_id: quote.id }))\n    : itemsForQuote(quote.id)
+  const customer = customerForQuote(displayQuote) ?? null
   // Supabase generates an opaque token that must be used verbatim. The
   // deterministic helper remains only as a demo-backend fallback.
-  const token = quote.public_token ?? publicTokenFor(quote.id)
+  const token = latestRevision?.status !== 'draft' && latestRevision?.public_token\n    ? latestRevision.public_token\n    : quote.public_token ?? publicTokenFor(quote.id)
   const publicUrl = `${window.location.origin}/q/${token}`
 
   const emailBody = buildEmailBody()
@@ -59,7 +59,7 @@ export function QuotePreview() {
     <div>
       <PageHeader
         title="Preview"
-        subtitle="Exactly what your customer will see."
+        subtitle={latestRevision?.status === 'draft' ? 'Pending revision — not yet sent to the customer.' : 'Exactly what your customer will see.'}
         back={{ to: `/quotes/${quote.id}`, label: 'Quote' }}
         actions={
           <div className="hidden gap-2 sm:flex">
