@@ -108,6 +108,10 @@ export class SupabaseRepository implements Repository {
     return toQuote(unwrap(await this.db.from('quotes').upsert(quote).select().single()))
   }
 
+  async sendQuote(quoteId: string): Promise<Quote> {
+    return toQuote(unwrap(await this.db.rpc('send_quote', { p_quote_id: quoteId })))
+  }
+
   async deleteQuote(id: string): Promise<void> {
     unwrap(await this.db.from('quotes').delete().eq('id', id).select())
   }
