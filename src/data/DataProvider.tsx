@@ -418,6 +418,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!quote) return
 
       const live = snapshotRef.current
+      if (quote.status !== 'draft') {
+        const pendingRevision = live.revisions
+          .filter((r) => r.quote_id === quoteId && r.status === 'draft')
+          .sort((a, b) => b.revision_number - a.revision_number)[0]
+        if (!pendingRevision) throw new Error('Save the revised quote before sending it.')
+        const sentRevision = await repo().sendQuoteRevision(pendingRevision.id)
+        commit((s) => ({
+          ...s,
+          revisions: s.revisions.map((r) => r.id === sentRevision.id ? sentRevision : r),
+        }))
+        return
+      }
       const customerName = live.customers.find((c) => c.id === quote.customer_id)?.name ?? ''
       const { quote: sent, followUps } = sendQuote(
         quote, customerName, live.business.default_validity_days,
@@ -439,6 +451,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (quoteId: string, decision: 'accepted' | 'declined') => {
       const quote = snapshotRef.current.quotes.find((q) => q.id === quoteId)
       if (!quote) return
+      if (quote.status === 'accepted' && decision === 'accepted') return
 
       let updated: Quote
       let job: Job | null = null
