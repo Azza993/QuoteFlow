@@ -15,23 +15,19 @@ export type ScanStatus = 'processing' | 'needs_review' | 'reviewed'
 export const QUOTE_STATUSES: QuoteStatus[] = ['draft', 'sent', 'accepted', 'declined', 'expired']
 export const LINE_ITEM_TYPES: LineItemType[] = ['service', 'material', 'allowance', 'other']
 
-/**
- * Tax is modelled as a named rate rather than a hardcoded "GST" boolean so a
- * different region's tax model can be swapped in without touching the schema.
- */
+/** Tax is modelled as a named rate rather than a hardcoded "GST" boolean. */
 export interface BusinessProfile {
   id: string
   business_name: string
   logo_url: string | null
-  /** Explicit setting — never inferred from the numbers a user types. */
   gst_inclusive: boolean
-  /** Fractional rate, e.g. 0.15 for NZ GST. */
   gst_rate: number
-  /** Display label for the tax line ("GST", "VAT", "Sales Tax", ...). */
   tax_label: string
   currency_code: string
   default_terms: string
   default_validity_days: number
+  /** Default markup applied to material cost when a cost is entered. */
+  default_material_markup: number
   contact_email: string | null
   contact_phone: string | null
   address: string | null
@@ -53,23 +49,19 @@ export interface Quote {
   id: string
   business_id: string
   customer_id: string | null
-  /** Null until the quote is accepted; acceptance creates the job. */
   job_id: string | null
   quote_number: string
   status: QuoteStatus
   site_address: string | null
   scope_summary: string | null
-  /** Snapshotted from the business profile when the quote is created. */
   gst_inclusive: boolean
   gst_rate: number
-  /** Minor units. Computed by `recalculateQuote`, never entered by hand. */
   subtotal: number
   gst_amount: number
   total: number
   valid_until: string | null
   terms: string | null
   source: QuoteSource
-  /** Database-generated opaque token used by the real customer-facing link. */
   public_token?: string | null
   created_at: string
   sent_at: string | null
@@ -120,11 +112,8 @@ export interface QuoteItem {
   description: string
   quantity: number
   unit: string
-  /** Minor units, optional — contractors don't always track cost. */
   cost: number | null
-  /** Percentage, e.g. 25 for a 25% markup. Optional. */
   markup: number | null
-  /** Minor units, per unit. This is the number that drives the totals. */
   selling_price: number
   type: LineItemType
   notes: string | null
@@ -170,37 +159,20 @@ export interface NoteScan {
   created_at: string
 }
 
-/* ------------------------------------------------------------------ */
-/* AI extraction shapes                                                */
-/* ------------------------------------------------------------------ */
-
-/** Normalised 0..1 box within the source image: [x, y, width, height]. */
 export type BoundingBox = [number, number, number, number]
-
-/**
- * Every value the extractor returns is wrapped so the Review screen can show a
- * confidence indicator and the exact photo crop the value was read from.
- */
 export interface ExtractedField<T> {
   value: T | null
-  /** 0..1. Anything below NEEDS_REVIEW_THRESHOLD is surfaced for review. */
   confidence: number
   source_image_index: number | null
   source_bbox: BoundingBox | null
 }
-
 export interface ExtractedLineItem {
   description: ExtractedField<string>
   quantity: ExtractedField<number>
   unit: ExtractedField<string>
-  /**
-   * A *guess* at a price read off the page, in minor units. It is never used in
-   * a total until a human confirms it on the Review screen.
-   */
   price_guess: ExtractedField<number>
   type: ExtractedField<LineItemType>
 }
-
 export interface ExtractionResult {
   customer: {
     name: ExtractedField<string>
@@ -208,17 +180,12 @@ export interface ExtractionResult {
     email: ExtractedField<string>
     address: ExtractedField<string>
   }
-  site: {
-    address: ExtractedField<string>
-  }
+  site: { address: ExtractedField<string> }
   scope: ExtractedField<string>
   line_items: ExtractedLineItem[]
   notes: ExtractedField<string>
-  /** Free-text explanation of anything the model could not read. */
   unreadable_notes: string[]
   model: string
   extracted_at: string
 }
-
-/** Below this, a field is flagged "needs review" rather than silently trusted. */
 export const NEEDS_REVIEW_THRESHOLD = 0.75
