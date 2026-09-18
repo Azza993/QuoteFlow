@@ -22,7 +22,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     env:
       VITE_SUPABASE_URL: https://qphqyjdkqspwnvvwevyp.supabase.co
-      VITE_SUPABASE_ANON_KEY: sb_publishable_RTPlPzbOo7sBuaw5Y_ItCQ_FIjOBiqy
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
       VITE_DATA_BACKEND: supabase
     steps:
       - name: Checkout
@@ -39,9 +39,6 @@ jobs:
 
       - name: Build
         run: npm run build
-
-      - name: SPA fallback
-        run: cp dist/index.html dist/404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
